@@ -24,8 +24,12 @@ function updateUI() {
   const livesEl = document.getElementById('lives');
   livesEl.innerHTML = '';
   for (let i = 0; i < lives; i++) {
-    const d = document.createElement('div');
+    const d = document.createElement('canvas');
     d.className = 'life';
+    d.width = d.height = 24;
+    d.ariaHidden = 'true';
+    PlayerArtwork.draw(d.getContext('2d'), { x: 12, y: 12, dir: 0, mouth: 0.4, alive: true },
+      { tile: 24, reducedMotion: true });
     livesEl.appendChild(d);
   }
 }

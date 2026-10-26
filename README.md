@@ -4,6 +4,8 @@
 
 **A modularly designed Pac-Man game, set in a dark atmosphere**
 
+**Play Pac-Man - After Hours now:** In a dark, alternate world, Pac-Man tries to escape the ghosts; he can only temporarily daze them by using his power-ups. Can you reach the power-ups in time, before the ghosts catch you?
+
 ## How to play
 
 - **Move:** Arrow keys or WASD
@@ -15,6 +17,8 @@
 **Touchcontrol:** Mobile controls added, simply use your screen to operate Pac-Man.
 
 **Redesign:** The entire world of Pac-Man has been redesigned; play Pac-Man in a gloomy city, illuminated by streetlights, as you try to escape the ghosts.
+
+**Pac-Man has been given a new design:** dark brass/amber look with soot shadows, glowing cracks, and a narrow glowing eye, includes matching life symbols and a power-glow effect.
 
 **Navigation/AI opponents:** All four ghosts now have their own navigation system, and the enemy AI has been fundamentally overhauled.
 

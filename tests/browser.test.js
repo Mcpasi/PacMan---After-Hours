@@ -64,7 +64,7 @@ async function waitFor(check, message, timeout = 20000) {
   throw new Error(message);
 }
 
-test('browser smoke: city, ghost artwork and search, movement, pause, mobile layout and offline fallback', {
+test('browser smoke: city, player and ghost artwork, search, movement, pause, mobile layout and offline fallback', {
   skip: !executable && 'Set PACMAN_BROWSER to a Chromium executable.', timeout: 90000
 }, async t => {
   let browser, client, profile;
@@ -194,6 +194,50 @@ test('browser smoke: city, ghost artwork and search, movement, pause, mobile lay
     await fs.writeFile(process.env.PACMAN_GHOST_SCREENSHOT, Buffer.from(artwork.preview.split(',')[1], 'base64'));
   }
   t.diagnostic('Four independent searches and all ghost artwork states verified.');
+
+  const playerArtwork = await client.evaluate(`(() => {
+    const surface = document.createElement('canvas'); surface.width = surface.height = 96;
+    const ctx = surface.getContext('2d'), signatures = [];
+    const preview = document.createElement('canvas'); preview.width = 384; preview.height = 240;
+    const previewContext = preview.getContext('2d');
+    previewContext.fillStyle = '#101b22'; previewContext.fillRect(0, 0, preview.width, preview.height);
+    const before = JSON.stringify({ player, maze, ghosts, score, lives, powerTimer });
+    for (const [row, powerTimer] of [0, 480].entries()) {
+      for (const dir of [0, 1, 2, 3]) {
+        ctx.clearRect(0, 0, 96, 96);
+        ctx.fillStyle = '#123456'; ctx.lineWidth = 3;
+        ClassicActors.player(ctx, { x: 48, y: 48, dir, mouth: 0.6, alive: true },
+          { tile: 64, powerTimer, time: 0, reducedMotion: true });
+        if (ctx.fillStyle !== '#123456' || ctx.lineWidth !== 3 || !ctx.getTransform().isIdentity || ctx.shadowBlur !== 0) {
+          throw new Error('Player artwork leaked Canvas state');
+        }
+        const [dx, dy] = DIRS[dir];
+        const bite = ctx.getImageData(48 + dx * 19, 48 + dy * 19, 1, 1).data[3];
+        const body = ctx.getImageData(48 - dx * 19, 48 - dy * 19, 1, 1).data[3];
+        if (body < 240 || bite > 180) throw new Error('Lost circular body or open bite: ' + dir);
+        signatures.push(surface.toDataURL());
+        previewContext.drawImage(surface, dir * 96, row * 96);
+        PlayerArtwork.draw(previewContext, { x: dir * 96 + 38 + row * 20, y: 216, dir, mouth: 0.6, alive: true },
+          { tile: 16, powerTimer, reducedMotion: true });
+      }
+    }
+    ctx.clearRect(0, 0, 96, 96);
+    PlayerArtwork.draw(ctx, { x: 48, y: 48, dir: 0, mouth: 0, alive: false }, { tile: 64, powerTimer: 480 });
+    if (ctx.getImageData(0, 0, 96, 96).data.some(value => value)) throw new Error('Dead player still draws');
+    for (const icon of document.querySelectorAll('#lives .life')) {
+      if (icon.tagName !== 'CANVAS' || !icon.getContext('2d').getImageData(0, 0, 24, 24).data.some(value => value)) {
+        throw new Error('Missing shared player skin in HUD');
+      }
+    }
+    if (JSON.stringify({ player, maze, ghosts, score, lives, powerTimer }) !== before) throw new Error('Artwork changed gameplay');
+    return { unique: new Set(signatures).size,
+      preview: ${process.env.PACMAN_PLAYER_SCREENSHOT ? 'preview.toDataURL()' : 'null'} };
+  })()`);
+  assert.equal(playerArtwork.unique, 8, 'all four player headings and both power states must render distinctly');
+  if (process.env.PACMAN_PLAYER_SCREENSHOT) {
+    await fs.writeFile(process.env.PACMAN_PLAYER_SCREENSHOT, Buffer.from(playerArtwork.preview.split(',')[1], 'base64'));
+  }
+  t.diagnostic('Player bite, headings, power states, Canvas isolation and HUD artwork verified.');
   await client.evaluate('resetLevel(false);');
 
   if (testThree) {

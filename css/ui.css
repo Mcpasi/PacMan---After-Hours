@@ -10,7 +10,7 @@
 .status-bar { display: flex; justify-content: space-between; align-items: center; min-height: 30px; gap: 8px; }
 .status-bar > span { font-size: 8px; letter-spacing: 1px; color: #748c89; text-align: right; }
 #lives { display: flex; gap: 5px; }
-.life { width: 11px; height: 11px; background: #d9b46f; border-radius: 50%; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 50% 50%); }
+.life { display: block; width: 13px; height: 13px; }
 #overlay {
   position: absolute;
   z-index: 2;
