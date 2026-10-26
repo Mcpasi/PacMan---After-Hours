@@ -15,6 +15,9 @@ test('the roster has four immutable identities, not array-index-dependent behavi
   assert.equal(GhostProfiles.get({}).id, 'blinky');
   const first = GhostProfiles.create(tile), second = GhostProfiles.create(tile);
   assert.deepEqual(first.map(ghost => ghost.houseTimer), [0, 60, 120, 180]);
+  assert.deepEqual(first.map(ghost => ghost.speed), GhostProfiles.all.map(profile => profile.speed));
+  first[0].speed = 1.9;
+  assert.equal(second[0].speed, GhostProfiles.all[0].speed);
   first[0].scared = true;
   assert.equal(second[0].scared, false);
 });

@@ -6,11 +6,7 @@ function showOverlay(title, msg = '', btn = 'CONTINUE') {
   document.getElementById('ovBtn').onclick = () => {
     if (gameState === 'paused') { gameState = 'playing'; showOverlay(null); }
     else if (gameState === 'gameOver' || gameState === 'title') startGame();
-    else if (gameState === 'levelComplete') {
-      gameState = 'playing';
-      showOverlay(null);
-      resetLevel(false);
-    }
+    else if (gameState === 'levelComplete') nextLevel();
   };
 }
 

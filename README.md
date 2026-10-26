@@ -25,6 +25,13 @@
 
 All four ghosts have also received a new design and new colors from me.
 
+**Next Level and Game Speed:** The game speed has been standardized; losing health affects the game tempo, while starting a new game resets it.
+
+- "Next Level": The Enter and Space keys both trigger a level transition.
+- Players and ghosts become faster with each level, up to their respective maximum limits.
+- Ghosts actually utilize this calculated speed.
+- Losing a life preserves the current level speed; starting a new game resets it.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**

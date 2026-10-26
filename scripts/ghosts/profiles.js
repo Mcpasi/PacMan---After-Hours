@@ -15,7 +15,7 @@ const GhostProfiles = (() => {
 
   function create(tile) {
     return all.map(profile => ({
-      id: profile.id, color: profile.index,
+      id: profile.id, color: profile.index, speed: profile.speed,
       x: (profile.index === 2 ? 12.5 : profile.index === 3 ? 15.5 : 13.5) * tile,
       y: (home.row + 0.5) * tile, dir: profile.startDir,
       mode: 'house', houseTimer: profile.index * 60, target: null,

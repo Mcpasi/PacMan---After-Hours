@@ -32,7 +32,7 @@ const GhostController = (() => {
           }
           continue;
         }
-        let remaining = ghost.mode === 'eyes' ? 2.4 : ghost.scared ? 0.9 : profiles.get(ghost).speed;
+        let remaining = ghost.mode === 'eyes' ? 2.4 : ghost.scared ? 0.9 : (ghost.speed ?? profiles.get(ghost).speed);
         while (remaining > epsilon) {
           if (centered(ghost)) {
             const cell = navigation.cellAt(ghost);

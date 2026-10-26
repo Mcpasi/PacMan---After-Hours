@@ -17,7 +17,18 @@ function init() {
   requestAnimationFrame(loop);
 }
 
+function getLevelSpeed(base, increment, maximum) {
+  // Derive from the level, not the previous actor: respawns keep their pace
+  // and repeated transitions cannot accumulate floating-point drift.
+  return Math.min(maximum, Math.round((base + (level - 1) * increment) * 100) / 100);
+}
+
 function resetLevel(isNewGame = false) {
+  if (isNewGame) {
+    level = 1;
+    score = 0;
+    lives = 3;
+  }
   loadMaze();
   GameRenderer.setMaze(maze);
   dotsLeft = 0;
@@ -27,18 +38,23 @@ function resetLevel(isNewGame = false) {
   player = {
     x: 13.5 * TILE, y: 22.5 * TILE,
     dir: 0, nextDir: 0, // 0=right,1=down,2=left,3=up
-    speed: 1.6, mouth: 0, mouthDir: 1, alive: true
+    speed: getLevelSpeed(1.6, 0.1, 2.2), mouth: 0, mouthDir: 1, alive: true
   };
   ghostController = GhostController.create(maze, TILE);
   ghosts = GhostProfiles.create(TILE);
+  ghosts.forEach(ghost => { ghost.speed = getLevelSpeed(ghost.speed, 0.08, 1.9); });
   powerMode = false;
   powerTimer = 0;
   ghostEatCombo = 0;
-  if (isNewGame) {
-    score = 0;
-    lives = 3;
-  }
   updateUI();
+}
+
+function nextLevel() {
+  if (gameState !== 'levelComplete') return;
+  level++;
+  resetLevel(false);
+  gameState = 'playing';
+  showOverlay(null);
 }
 
 function startGame() {

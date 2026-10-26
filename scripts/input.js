@@ -29,14 +29,7 @@ function onKeyDown(e) {
     else if (gameState === 'paused') {
       gameState = 'playing';
       showOverlay(null);
-    } else if (gameState === 'levelComplete') {
-      gameState = 'playing';
-      showOverlay(null);
-      resetLevel(false);
-      // slight speed increase
-      player.speed = Math.min(2.2, player.speed + 0.1);
-      ghosts.forEach(g => g.speed = Math.min(1.9, (g.speed||1.4) + 0.08));
-    }
+    } else if (gameState === 'levelComplete') nextLevel();
   }
   const dir = KEY_DIRS[key];
   if (Number.isInteger(dir)) {
