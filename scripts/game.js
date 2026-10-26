@@ -24,6 +24,7 @@ function getLevelSpeed(base, increment, maximum) {
 }
 
 function resetLevel(isNewGame = false) {
+  resetSimulationClock();
   if (isNewGame) {
     level = 1;
     score = 0;

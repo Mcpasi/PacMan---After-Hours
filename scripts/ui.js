@@ -4,7 +4,7 @@ function showOverlay(title, msg = '', btn = 'CONTINUE') {
   ov.style.display = 'flex';
   ov.innerHTML = `<h1>${title}</h1><p>${msg}</p><button id="ovBtn">${btn}</button>`;
   document.getElementById('ovBtn').onclick = () => {
-    if (gameState === 'paused') { gameState = 'playing'; showOverlay(null); }
+    if (gameState === 'paused') { gameState = 'playing'; resetSimulationClock(); showOverlay(null); }
     else if (gameState === 'gameOver' || gameState === 'title') startGame();
     else if (gameState === 'levelComplete') nextLevel();
   };

@@ -18,6 +18,7 @@ const GhostController = (() => {
     }
 
     function update(ghosts, player, powerMode) {
+      // One fixed 60 Hz simulation tick; rendering may run at a different rate.
       let targets;
       const reservations = ghosts.filter(ghost => ghost.mode === 'chase' && !centered(ghost)).map(ghost => {
         const next = nextCenter(ghost);

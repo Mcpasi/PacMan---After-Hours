@@ -62,7 +62,7 @@ function updatePlayer() {
       score += 50;
       dotsLeft--;
       powerMode = true;
-      powerTimer = 480; // ~8 seconds at 60fps
+      powerTimer = 8 * SIMULATION_HZ; // Eight seconds, independent of rendering FPS.
       ghostEatCombo = 0;
       ghosts.forEach(g => {
         if (g.mode === 'house' || g.mode === 'eyes') return;

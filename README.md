@@ -36,6 +36,8 @@ All four ghosts have also received a new design and new colors from me.
 - Ghosts actually utilize this calculated speed.
 - Losing a life preserves the current level speed; starting a new game resets it.
 
+**Fixed:** The simulation now runs on a fixed 60 Hz time step, independent of the rendering FPS.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**

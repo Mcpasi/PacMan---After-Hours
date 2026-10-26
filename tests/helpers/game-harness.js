@@ -101,8 +101,13 @@ function boot(options = {}) {
   const run = code => vm.runInContext(code, context);
   window.emit('load');
   let timestamp = 0;
+  function frameAt(time) {
+    assert.ok(frames.length, 'animation loop must keep running');
+    frames.shift()(time);
+    timestamp = time + 1000 / 60;
+  }
   return {
-    run, elements, frames, drawing, storage,
+    run, elements, frames, drawing, storage, frameAt,
     click(id = 'startBtn') { elements.get(id).emit('click'); },
     key(key, repeat = false) {
       const event = { key, repeat, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
@@ -114,9 +119,7 @@ function boot(options = {}) {
     },
     advance(count = 1) {
       for (let i = 0; i < count; i++) {
-        assert.ok(frames.length, 'animation loop must keep running');
-        frames.shift()(timestamp);
-        timestamp += 1000 / 60;
+        frameAt(timestamp);
       }
     },
     respawn() {

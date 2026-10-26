@@ -19,6 +19,7 @@ function onKeyDown(e) {
     e.preventDefault();
     if (gameState === 'playing') gameState = 'paused';
     else gameState = 'playing';
+    resetSimulationClock();
     showOverlay(gameState === 'paused' ? 'PAUSED' : null);
     return;
   }
@@ -28,6 +29,7 @@ function onKeyDown(e) {
     if (gameState === 'title' || gameState === 'gameOver') startGame();
     else if (gameState === 'paused') {
       gameState = 'playing';
+      resetSimulationClock();
       showOverlay(null);
     } else if (gameState === 'levelComplete') nextLevel();
   }

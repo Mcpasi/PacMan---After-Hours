@@ -120,7 +120,8 @@ test('invalid saved scores fall back to zero and high scores still save', () => 
   assert.equal(game.run('highScore'), 0);
   game.click();
   game.run('player.x = 1.5 * TILE; player.y = 1.5 * TILE;');
-  game.advance();
+  game.advance(2); // The first timestamp establishes the simulation clock.
+  assert.ok(game.run('score') > 0);
   assert.equal(game.storage.get('pacmanHigh'), String(game.run('score')));
 });
 
