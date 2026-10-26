@@ -6,6 +6,7 @@ const BonusLife = (() => {
       throw new TypeError('Bonus lives need a rectangular grid, a positive tile size and tick rate.');
     }
     const rows = maze.length, cols = maze[0].length;
+    const width = cols * tile;
     const walkable = (col, row) => row >= 0 && row < rows && [1, 2, 3].includes(maze[row][col]);
     const start = { col: Math.floor(origin.x / tile), row: Math.floor(origin.y / tile) };
     const streets = walkable(start.col, start.row) ? [start] : [];
@@ -41,7 +42,10 @@ const BonusLife = (() => {
         const choices = distant.length ? distant : candidates;
         state.coin = { ...choices[Math.floor(random() * choices.length)] };
       }
-      if (state.collected || !state.coin || Math.hypot(player.x - state.coin.x, player.y - state.coin.y) >= tile * 0.65) {
+      if (state.collected || !state.coin) return false;
+      // The player can reach a coin across the horizontal tunnel seam.
+      const dx = Math.abs(player.x - state.coin.x) % width;
+      if (Math.hypot(Math.min(dx, width - dx), player.y - state.coin.y) >= tile * 0.65) {
         return false;
       }
       state.collected = true;

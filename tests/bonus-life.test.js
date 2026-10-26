@@ -82,6 +82,42 @@ test('open horizontal tunnels participate in reachability, but power pellets are
   assert.deepEqual(bonus.state.coin, { x: 4.5 * tile, y: 1.5 * tile });
 });
 
+for (const x of [0, -tile / 2]) {
+  test(`a coin across the horizontal tunnel seam can be collected at x=${x}`, () => {
+    const maze = [Array(7).fill(0), [2, 0, 0, 0, 0, 0, 2], Array(7).fill(0)];
+    const player = { ...origin, x: tile / 2 };
+    const bonus = BonusLife.create(maze, tile, { origin: player, random: () => 0 });
+    tick(bonus, player);
+    const coin = { x: 6.5 * tile, y: player.y };
+    assert.deepEqual(bonus.state.coin, coin);
+    assert.equal(bonus.update({ ...player, x: tile * 0.2 }), false, 'outside pickup distance');
+    assert.equal(bonus.update({ ...player, x, y: player.y + tile }), false, 'vertical distance still counts');
+    assert.equal(bonus.update({ ...player, x, alive: false }), false);
+    assert.equal(bonus.update({ ...player, x }), true, 'pickup distance must include horizontal wrapping');
+    assert.equal(bonus.state.collected, true);
+    assert.equal(bonus.state.coin, null);
+    assert.deepEqual(bonus.state.effect, { ...coin, age: 0, duration: 72 });
+    assert.equal(bonus.update({ ...player, x }), false, 'the same coin cannot award a second life');
+  });
+}
+
+test('walking left through a tunnel awards the bonus life before passing its wrapped center', () => {
+  const game = start();
+  game.run(`maze = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+    maze[11][0] = maze[11][COLS - 1] = 2;
+    dotsLeft = 2;
+    Object.assign(player, { x: TILE / 2, y: 11.5 * TILE, dir: 2, nextDir: 2 });
+    bonusLife = BonusLife.create(maze, TILE, { origin: player });`);
+  spawn(game);
+  assert.equal(game.run('bonusLife.state.coin.x'), 27.5 * tile);
+  game.run('player.speed = 1.6; for (let i = 0; i < 10; i++) updatePlayer();');
+  assert.equal(game.run('player.x'), -tile / 2, 'movement reaches the wrapped coin center');
+  assert.equal(game.run('lives'), 4);
+  assert.equal(game.elements.get('lives').children.length, 4);
+  assert.equal(game.run('bonusLife.state.collected'), true);
+  assert.equal(game.run('bonusLife.state.coin'), null);
+});
+
 test('empty reachable paths support a bonus, and a blocked origin never spawns an unreachable coin', () => {
   const player = { ...origin, x: tile / 2, y: tile / 2 };
   const empty = BonusLife.create([[1]], tile, { origin: player, random: () => 0 });

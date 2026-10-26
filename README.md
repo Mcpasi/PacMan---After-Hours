@@ -40,6 +40,27 @@ All four ghosts have also received a new design and new colors from me.
 
 **Fixed:** After the first two deaths, labyrinth progress and score are retained. A third death results in "Game Over"; restarting resets everything completely. Level transitions remain unchanged.
 
+**Added:**
+
+- One bonus coin per level, appearing at a random, accessible location after 4–10 seconds of active gameplay.
+- Antique brass-gold finish, embossed with a Pac-Man design; features rotation, a glowing effect, and a reflection on the ground.
+- Collecting it grants an extra life, accompanied by a golden pulse effect and an “+1 LIFE” indicator.
+- No bonus coin reappears after losing a life.
+
+**Bug fixed and reproduced**
+
+ - The collection check failed to account for 
+   the tunnel wrap. With a width of 112, a 
+   player at x=-8 and a coin at x=104 were not 
+   recognized as being at the same position. 
+ - Fix: scripts/bonus-life.js now accounts for 
+   the horizontal wrap. 
+ - Verification: Three new regression tests in 
+   tests/bonus-life.test.js failed before the 
+   fix and pass afterward. 
+ - Total tests: 156 passed, one optional 
+   browser test skipped.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**
