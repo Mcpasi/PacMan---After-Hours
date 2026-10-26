@@ -73,6 +73,10 @@ function updatePlayer() {
       updateUI();
     }
   }
+  if (bonusLife.update(player)) {
+    lives++;
+    updateUI();
+  }
   if (dotsLeft <= 0) {
     gameState = 'levelComplete';
     showOverlay('LEVEL COMPLETE!', 'Press Enter or click to continue', 'NEXT LEVEL');

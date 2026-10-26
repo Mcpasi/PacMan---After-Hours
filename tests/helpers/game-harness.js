@@ -93,6 +93,7 @@ function boot(options = {}) {
     requestAnimationFrame(callback) { frames.push(callback); },
     setTimeout(callback, delay) { timers.push({ callback, delay }); }
   };
+  if (options.random) sandbox.Math = Object.assign(Object.create(Math), { random: options.random });
   if (options.storage === 'accessThrows') {
     Object.defineProperty(sandbox, 'localStorage', { get() { throw new Error('SecurityError'); } });
   }

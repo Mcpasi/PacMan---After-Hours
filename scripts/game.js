@@ -36,6 +36,7 @@ function resetLevel(isNewGame = false) {
     for (let c = 0; c < COLS; c++)
       if (maze[r][c] === 2 || maze[r][c] === 3) dotsLeft++;
   resetActors();
+  bonusLife = BonusLife.create(maze, TILE, { origin: player, ticksPerSecond: SIMULATION_HZ });
 }
 
 function resetActors() {

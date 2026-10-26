@@ -23,7 +23,7 @@ function loop(ts) {
     }
   }
   if (gameState !== 'playing') simulationAccumulator = 0;
-  GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState });
+  GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState, bonusLife: bonusLife.state });
   // ready message
   if (gameState === 'playing' && animFrame < 90) {
     ctx.fillStyle = '#ffff00';

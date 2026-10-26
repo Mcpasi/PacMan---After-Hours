@@ -238,6 +238,49 @@ test('browser smoke: city, player and ghost artwork, search, movement, pause, mo
     await fs.writeFile(process.env.PACMAN_PLAYER_SCREENSHOT, Buffer.from(playerArtwork.preview.split(',')[1], 'base64'));
   }
   t.diagnostic('Player bite, headings, power states, Canvas isolation and HUD artwork verified.');
+
+  const bonus = await client.evaluate(`(() => {
+    const surface = document.createElement('canvas'); surface.width = surface.height = 128;
+    const ctx = surface.getContext('2d'), signatures = [];
+    const before = JSON.stringify({ player, maze, ghosts, score, lives, powerTimer, bonus: bonusLife.state });
+    for (const time of [0, 2]) {
+      ctx.clearRect(0, 0, 128, 128); ctx.fillStyle = '#123456'; ctx.lineWidth = 3;
+      BonusLifeArtwork.drawCoin(ctx, { x: 64, y: 64 }, { tile: 64, time });
+      if (ctx.fillStyle !== '#123456' || ctx.lineWidth !== 3 || !ctx.getTransform().isIdentity || ctx.shadowBlur !== 0) {
+        throw new Error('Bonus coin leaked Canvas state');
+      }
+      if (!ctx.getImageData(0, 0, 128, 128).data.some(value => value)) throw new Error('Invisible bonus coin');
+      signatures.push(surface.toDataURL());
+    }
+    const reduced = [];
+    for (const time of [0, 20]) {
+      ctx.clearRect(0, 0, 128, 128);
+      BonusLifeArtwork.drawCoin(ctx, { x: 64, y: 64 }, { tile: 64, time, reducedMotion: true });
+      reduced.push(surface.toDataURL());
+    }
+    if (reduced[0] !== reduced[1]) throw new Error('Reduced-motion bonus still rotates');
+    for (const reducedMotion of [false, true]) {
+      ctx.clearRect(0, 0, 128, 128);
+      BonusLifeArtwork.drawEffect(ctx, { x: 64, y: 80, age: 0, duration: 72 }, { tile: 32, reducedMotion });
+      if (!ctx.getImageData(0, 0, 128, 128).data.some(value => value)) throw new Error('Invisible +1 LIFE');
+      if (!ctx.getTransform().isIdentity || ctx.globalAlpha !== 1 || ctx.shadowBlur !== 0) throw new Error('Bonus effect leaked Canvas state');
+    }
+    if (JSON.stringify({ player, maze, ghosts, score, lives, powerTimer, bonus: bonusLife.state }) !== before) {
+      throw new Error('Bonus artwork changed gameplay');
+    }
+    resetLevel(false); player.speed = 0;
+    for (let i = bonusLife.state.ticksUntilSpawn; i > 0; i--) updatePlayer();
+    if (!bonusLife.state.coin) throw new Error('No bonus coin appeared');
+    const previousLives = lives;
+    Object.assign(player, bonusLife.state.coin); updatePlayer(); updatePlayer();
+    if (lives !== previousLives + 1 || !bonusLife.state.collected || bonusLife.state.coin !== null) {
+      throw new Error('Bonus pickup did not award exactly one life');
+    }
+    return { unique: new Set(signatures).size, lives, icons: document.querySelectorAll('#lives .life').length };
+  })()`);
+  assert.equal(bonus.unique, 2, 'coin rotation must change the real Canvas image');
+  assert.equal(bonus.icons, bonus.lives);
+  t.diagnostic('Bonus coin, rotation, reduced motion, collection effect and extra HUD life verified.');
   await client.evaluate('resetLevel(false);');
 
   if (testThree) {
