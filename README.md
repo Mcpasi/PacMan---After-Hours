@@ -1,6 +1,6 @@
 # PacMan - After Hours
 
-**Play it live: https://marlandoj.github.io/grok-PacMan/**
+**Play it live: https://mcpasi.github.io/PacMan---After-Hours/**
 
 **A modularly designed Pac-Man game, set in a dark atmosphere**
 
