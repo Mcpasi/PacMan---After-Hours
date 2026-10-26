@@ -24,7 +24,6 @@ function getLevelSpeed(base, increment, maximum) {
 }
 
 function resetLevel(isNewGame = false) {
-  resetSimulationClock();
   if (isNewGame) {
     level = 1;
     score = 0;
@@ -36,6 +35,11 @@ function resetLevel(isNewGame = false) {
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
       if (maze[r][c] === 2 || maze[r][c] === 3) dotsLeft++;
+  resetActors();
+}
+
+function resetActors() {
+  resetSimulationClock();
   player = {
     x: 13.5 * TILE, y: 22.5 * TILE,
     dir: 0, nextDir: 0, // 0=right,1=down,2=left,3=up

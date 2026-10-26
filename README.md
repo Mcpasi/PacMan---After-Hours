@@ -38,6 +38,8 @@ All four ghosts have also received a new design and new colors from me.
 
 **Fixed:** The simulation now runs on a fixed 60 Hz time step, independent of the rendering FPS.
 
+**Fixed:** After the first two deaths, labyrinth progress and score are retained. A third death results in "Game Over"; restarting resets everything completely. Level transitions remain unchanged.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**

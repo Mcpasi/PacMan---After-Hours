@@ -117,8 +117,7 @@ function checkCollisions() {
             gameState = 'gameOver';
             showOverlay('GAME OVER', `Final Score: ${score}`, 'RESTART');
           } else {
-            resetLevel(false);
-            player.alive = true;
+            resetActors();
           }
         }, 1500);
       }

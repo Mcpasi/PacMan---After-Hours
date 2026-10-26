@@ -123,8 +123,9 @@ function boot(options = {}) {
       }
     },
     respawn() {
-      const timer = timers.find(({ delay }) => delay === 1500);
-      assert.ok(timer, 'death must schedule a respawn');
+      const index = timers.findIndex(({ delay }) => delay === 1500);
+      assert.notEqual(index, -1, 'death must schedule a respawn');
+      const [timer] = timers.splice(index, 1);
       timer.callback();
     }
   };
