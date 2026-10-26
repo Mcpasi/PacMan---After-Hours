@@ -55,13 +55,13 @@ With Chromium – all tests
 
 ---
 
-## What's inside
+## My search for third-party repos and discovering Grok-PacMan
 
-- Classic-style tile maze with walls, dots, four power pellets, a central ghost house with staggered ghost exits, and wrap-around tunnel exits on the left and right.
-- Four ghosts — Blinky, Pinky, Inky, and Clyde — each with its own simple AI behaviour (direct chase, ambush, flank, and a shy/random style), vulnerable mode after a power pellet, and eyes that return to the house to regenerate after being eaten.
-- Score and high score (persisted in `localStorage`), lives display, title / level-complete / game-over overlays, and pause.
-- Pac-Man mouth and ghost animations on an HTML5 Canvas, and sound effects synthesized with the Web Audio API — no audio files, no external requests.
+I spent hours sifting through repositories, eventually stumbled upon Grok-PacMan, clicked on the demo page, and was shocked by how badly Pac-Man had been mangled.
 
+In his README, he claimed that tests were in place and that movements, among other things, were properly handled, ensuring the character could move around. This was not the case: the character was stuck inside a wall, the game speed was inconsistent, and the "next level" speed functionality didn't work at all. As for the tests? They consisted of a single HTML file containing only basic logic checks, there were no proper smoke tests to speak of.
+
+There is nothing wrong with using AI agents, and there is no reason to feel ashamed of it; however, an agent should be operated by an experienced user.
 
 ## Provenance
 
