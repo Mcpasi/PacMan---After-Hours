@@ -1,0 +1,33 @@
+.district-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.eyebrow { display: block; font-size: clamp(7px, 1.8vw, 9px); letter-spacing: 2px; color: #99aaa6; }
+.district-header h1 { font-size: clamp(18px, 5vw, 28px); letter-spacing: -1px; margin-top: 5px; }
+.district-header h1 span { color: #e6ad64; }
+.district-time { color: #829b97; font-size: 9px; line-height: 1.7; text-align: right; white-space: nowrap; }
+.district-time b { color: #d4b482; font-weight: normal; }
+#ui { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 1px; margin-bottom: 9px; }
+#score { color: #e1d4b9; }
+#highScore { color: #8ba39e; }
+.status-bar { display: flex; justify-content: space-between; align-items: center; min-height: 30px; gap: 8px; }
+.status-bar > span { font-size: 8px; letter-spacing: 1px; color: #748c89; text-align: right; }
+#lives { display: flex; gap: 5px; }
+.life { width: 11px; height: 11px; background: #d9b46f; border-radius: 50%; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 50% 50%); }
+#overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: linear-gradient(180deg, #040b1273, #040b12cf 65%, #040b12ec);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 16px;
+}
+#overlay h1, #overlay h2 { color: #e3d6b8; font-size: clamp(24px, 8vw, 48px); line-height: 1; letter-spacing: -2px; margin: 18px 0; text-shadow: 0 0 30px #c49d5326; }
+#overlay p { color: #adbbb5; margin: 6px 0; font-size: clamp(10px, 2.6vw, 13px); line-height: 1.8; }
+#overlay .controls { color: #7f9691; font-size: clamp(9px, 2.2vw, 11px); margin-top: 16px; }
+button { margin-top: 22px; padding: 13px 21px; font-size: 11px; letter-spacing: 1px; font-family: inherit; background: #d6b77e; color: #111b20; border: 1px solid #eed8a8; cursor: pointer; font-weight: bold; }
+button span { margin-left: 12px; }
+button:hover { background: #f0d8a7; }
+button:focus-visible { outline: 2px solid #f6e4bc; outline-offset: 5px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

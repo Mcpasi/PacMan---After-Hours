@@ -1,0 +1,61 @@
+<!--
+Pac-Man - After Hours V0.1.0
+The project's original name was Grok-PacMan; 
+significant portions of the code have been completely replaced.
+Copyright © Mcpasi 2026
+https://github.com/Mcpasi
+
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pac-Man · After Hours</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/ui.css">
+<script src="scripts/audio.js" defer></script>
+<script src="scripts/maze.js" defer></script>
+<script src="scripts/ghosts/profiles.js" defer></script>
+<script src="scripts/ghosts/navigation.js" defer></script>
+<script src="scripts/ghosts/ai.js" defer></script>
+<script src="scripts/ghosts/controller.js" defer></script>
+<script src="scripts/state.js" defer></script>
+<script src="scripts/game.js" defer></script>
+<script src="scripts/input.js" defer></script>
+<script src="scripts/ui.js" defer></script>
+<script src="scripts/movement.js" defer></script>
+<script src="scripts/rendering/city-layout.js" defer></script>
+<script src="scripts/rendering/city-canvas.js" defer></script>
+<script src="scripts/rendering/ghosts.js" defer></script>
+<script src="scripts/rendering/actors.js" defer></script>
+<script src="scripts/rendering.js" defer></script>
+<script src="scripts/main.js" defer></script>
+</head>
+<body>
+<div id="gameContainer">
+  <header class="district-header">
+    <div><span class="eyebrow">PACMAN / NIGHT 01</span><h1>AFTER HOURS<span>.</span></h1></div>
+    <span class="district-time">OLD TOWN<br><b>03:17 AM</b></span>
+  </header>
+  <div id="ui">
+    <div id="score">SCORE: 0</div>
+    <div id="highScore">HIGH: 0</div>
+  </div>
+  <div id="gameViewport">
+    <canvas id="gameCanvas" aria-label="Pac-Man in the streets of Old Town"></canvas>
+    <div id="overlay">
+      <span class="eyebrow">THE STREETS ARE EMPTY. ALMOST.</span>
+      <h2>STAY IN<br>THE LIGHT.</h2>
+      <p>Collect every light. Don’t get caught.</p>
+      <p class="controls">Arrow keys / WASD / swipe<br>P or Esc to pause</p>
+      <button id="startBtn">ENTER OLD TOWN <span aria-hidden="true">→</span></button>
+    </div>
+  </div>
+  <footer class="status-bar"><div id="lives" aria-label="Lives remaining"></div><span>KEEP MOVING. THEY ARE CLOSE.</span></footer>
+</div>
+
+</body>
+</html>
