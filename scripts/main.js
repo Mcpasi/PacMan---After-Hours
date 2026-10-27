@@ -24,11 +24,14 @@ function loop(ts) {
       if (gameState !== 'playing') break;
       updateGhosts();
       checkCollisions();
+      if (player.alive) level256Glitch.update();
     }
   }
   if (gameState !== 'playing') simulationAccumulator = 0;
   GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState,
-    bonusLife: bonusLife.state, playerDeath: playerDeath?.state });
+    bonusLife: bonusLife.state, playerDeath: playerDeath?.state,
+    level256Glitch: player.alive && (gameState === 'playing' || gameState === 'paused')
+      ? level256Glitch.state.effect : null });
   // ready message
   if (gameState === 'playing' && player.alive && animFrame < 90) {
     ctx.fillStyle = '#ffff00';

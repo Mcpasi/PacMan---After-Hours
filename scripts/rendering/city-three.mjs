@@ -16,6 +16,8 @@ export function createCityScene({ three: THREE, canvas, paintGround, onFailure,
   const camera = new THREE.OrthographicCamera();
   const resources = new Set();
   let disposed = false, glowMaterial, lanternMaterial, localLights = [];
+  let lampMeshes = [], lampsDimmed = false;
+  const lampTint = new THREE.Color();
   const own = resource => { resources.add(resource); return resource; };
 
   function clearScene() {
@@ -23,6 +25,8 @@ export function createCityScene({ three: THREE, canvas, paintGround, onFailure,
     for (const resource of resources) resource.dispose();
     resources.clear();
     localLights = [];
+    lampMeshes = [];
+    lampsDimmed = false;
     renderer.renderLists.dispose();
   }
 
@@ -90,6 +94,7 @@ export function createCityScene({ three: THREE, canvas, paintGround, onFailure,
       mesh.castShadow = shadows;
       mesh.receiveShadow = shadows;
       scene.add(mesh);
+      return mesh;
     }
     const stone = own(new THREE.MeshStandardMaterial({ color: '#34434a', roughness: 0.87 }));
     const roof = own(new THREE.MeshStandardMaterial({ color: '#1d2d37', roughness: 0.76, metalness: 0.18 }));
@@ -152,6 +157,14 @@ export function createCityScene({ three: THREE, canvas, paintGround, onFailure,
     glowMaterial = own(new THREE.MeshBasicMaterial({ map: glow, transparent: true,
       blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.85 }));
     lanternMaterial = own(new THREE.MeshStandardMaterial({ color: '#ffe6ad', emissive: '#ffc375', emissiveIntensity: 2 }));
+    // Standard instancing tints diffuse color only; the glowing core must dim too.
+    lanternMaterial.onBeforeCompile = shader => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        #ifdef USE_COLOR
+          totalEmissiveRadiance *= vColor;
+        #endif`);
+    };
     const posts = [], lanterns = [], caps = [], pools = [];
     layout.lamps.forEach((lamp, i) => {
       const z = tile * 0.65;
@@ -168,15 +181,29 @@ export function createCityScene({ three: THREE, canvas, paintGround, onFailure,
       }
     });
     instances(box, trim, posts, true);
-    instances(box, lanternMaterial, lanterns);
+    lampMeshes.push(instances(box, lanternMaterial, lanterns));
     instances(box, trim, caps, true);
-    instances(plane, glowMaterial, pools);
+    lampMeshes.push(instances(plane, glowMaterial, pools));
     // A smaller halo above the cap makes the glowing lantern visible from overhead.
-    instances(plane, glowMaterial, layout.lamps.map(lamp => ({ x: lamp.x, y: lamp.y,
-      z: tile * 0.65 + 3, width: 13, depth: 13 })));
+    lampMeshes.push(instances(plane, glowMaterial, layout.lamps.map(lamp => ({ x: lamp.x, y: lamp.y,
+      z: tile * 0.65 + 3, width: 13, depth: 13 }))));
+    updateLampLevels(null, true);
     renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
     if (!renderer.domElement.parentNode) canvas.parentNode.insertBefore(renderer.domElement, canvas);
+  }
+
+  function updateLampLevels(levels, force = false) {
+    if (!force && !levels && !lampsDimmed) return;
+    for (const mesh of lampMeshes) {
+      if (!mesh) continue;
+      for (let index = 0; index < mesh.count; index++) {
+        const level = levels?.[index] ?? 1;
+        mesh.setColorAt(index, lampTint.setRGB(level, level, level));
+      }
+      mesh.instanceColor.needsUpdate = true;
+    }
+    lampsDimmed = !!levels;
   }
 
   return {
@@ -187,7 +214,8 @@ export function createCityScene({ three: THREE, canvas, paintGround, onFailure,
       const intensity = frame.reducedMotion ? 1 : 0.96 + Math.sin(frame.time * 1.8) * 0.04;
       glowMaterial.opacity = 0.85 * intensity;
       lanternMaterial.emissiveIntensity = 2 * intensity;
-      localLights.forEach(light => { light.intensity = 120 * intensity; });
+      updateLampLevels(frame.lampLevels);
+      localLights.forEach((light, index) => { light.intensity = 120 * intensity * (frame.lampLevels?.[index] ?? 1); });
       renderer.render(scene, camera);
     },
     dispose() {

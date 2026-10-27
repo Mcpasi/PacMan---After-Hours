@@ -91,8 +91,9 @@ const CanvasCity = (() => {
         ctx.drawImage(background, 0, 0);
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
-        for (const lamp of layout.lamps) {
-          const glow = frame.reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(frame.time * 1.8 + lamp.seed * 20);
+        for (const [index, lamp] of layout.lamps.entries()) {
+          const glow = (frame.lampLevels?.[index] ?? 1) *
+            (frame.reducedMotion ? 1 : 0.94 + 0.06 * Math.sin(frame.time * 1.8 + lamp.seed * 20));
           const gradient = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, layout.tile * 2.4);
           gradient.addColorStop(0, `rgba(255, 191, 101, ${0.3 * glow})`);
           gradient.addColorStop(0.35, `rgba(222, 141, 63, ${0.12 * glow})`);
@@ -101,12 +102,12 @@ const CanvasCity = (() => {
           ctx.fillRect(lamp.x - layout.tile * 2.4, lamp.y - layout.tile * 2.4, layout.tile * 4.8, layout.tile * 4.8);
         }
         ctx.restore();
-        for (const lamp of layout.lamps) {
+        for (const [index, lamp] of layout.lamps.entries()) {
           ctx.fillStyle = '#03080c';
           ctx.fillRect(lamp.x - 1, lamp.y - 1, 2, 7);
           ctx.fillStyle = '#6a6352';
           ctx.fillRect(lamp.x - 3, lamp.y - 3, 6, 6);
-          ctx.fillStyle = '#ffe3a3';
+          ctx.fillStyle = `rgba(255, 227, 163, ${frame.lampLevels?.[index] ?? 1})`;
           ctx.fillRect(lamp.x - 1.5, lamp.y - 1.5, 3, 3);
         }
       },

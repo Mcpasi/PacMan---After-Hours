@@ -1,5 +1,5 @@
 const GameRenderer = (() => {
-  let fallback, environment, layout, surface;
+  let fallback, environment, layout, surface, glitchArtwork;
   let actors = { ...ClassicActors };
   let time = 0, previousTime = null, generation = 0;
   let reducedMotion = false;
@@ -40,6 +40,7 @@ const GameRenderer = (() => {
 
   function setMaze(maze) {
     layout = CityLayout.create(maze, TILE);
+    glitchArtwork = Level256GlitchArtwork.create(layout);
     fallback.setLayout(layout);
     if (environment !== fallback) {
       try { environment.setLayout(layout); } catch { useFallback(); }
@@ -79,10 +80,13 @@ const GameRenderer = (() => {
     const delta = previousTime === null ? 0 : Math.max(0, Math.min(100, timestamp - previousTime));
     previousTime = timestamp;
     if (state.gameState !== 'paused') time += delta / 1000;
-    const frame = { time, reducedMotion };
+    const glitch = glitchArtwork.frame(state.level256Glitch, { reducedMotion });
+    const frame = { time, reducedMotion, lampLevels: glitch?.lampLevels };
     const ctx = surface.getContext('2d');
     ctx.clearRect(0, 0, surface.width, surface.height);
     try { environment.draw(ctx, frame); } catch { useFallback(); fallback.draw(ctx, frame); }
+    // Corruption stays in the scenery: pellets, bonuses and every actor remain readable.
+    glitchArtwork.draw(ctx, glitch);
     drawCollectibles(ctx, frame, state.maze);
     const options = { tile: TILE, colors: GHOST_COLORS, dirs: DIRS,
       powerTimer: state.powerTimer, animFrame: reducedMotion ? 0 : state.animFrame, time, reducedMotion };

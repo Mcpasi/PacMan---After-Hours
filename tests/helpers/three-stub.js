@@ -23,6 +23,10 @@ function createThreeStub() {
       this.disposals = 0; resources.push(this);
     }
     setMatrixAt(index, matrix) { this.matrices[index] = structuredClone(matrix); }
+    setColorAt(index, color) {
+      this.instanceColor ||= { colors: [] };
+      this.instanceColor.colors[index] = [color.r, color.g, color.b];
+    }
     dispose() { this.disposals++; }
   }
   class Light extends Object3D {
@@ -68,7 +72,10 @@ function createThreeStub() {
     resources, renderers, document, canvas,
     three: {
       WebGLRenderer, Scene, Object3D, OrthographicCamera, DirectionalLight, InstancedMesh, Mesh, CanvasTexture,
-      Color: class { constructor(value) { this.value = value; } },
+      Color: class {
+        constructor(value) { this.value = value; }
+        setRGB(r, g, b) { Object.assign(this, { r, g, b }); return this; }
+      },
       HemisphereLight: Light, PointLight: Light,
       BoxGeometry: Resource, PlaneGeometry: Resource, MeshStandardMaterial: Material, MeshBasicMaterial: Material,
       SRGBColorSpace: 'srgb', ACESFilmicToneMapping: 'aces', PCFSoftShadowMap: 'pcf', AdditiveBlending: 'additive'

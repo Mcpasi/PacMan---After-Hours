@@ -83,3 +83,29 @@ test('Three.js reports context loss and refuses to render a lost or disposed con
   scene.dispose();
   assert.throws(() => scene.draw(null, { time: 0, reducedMotion: false }), /context unavailable/);
 });
+
+test('glitch dimming affects individual GPU lanterns, halos, pools and point lights without rebuilding the scene', async () => {
+  const { scene, renderer, layout, three, resources } = await createScene();
+  const meshes = renderer.scene.children.filter(mesh => mesh instanceof three.InstancedMesh && mesh.instanceColor);
+  const lights = renderer.scene.children.filter(child => child instanceof three.PointLight && child.color === '#ffbd70');
+  assert.equal(meshes.length, 3, 'the cores and both halo layers share per-lamp dimming');
+  const resourceCount = resources.length;
+  const lampLevels = layout.lamps.map((_, index) => index === 0 ? 0.3 : index === 2 ? 0.65 : 1);
+  scene.draw(null, { time: 0, reducedMotion: true, lampLevels });
+  for (const mesh of meshes) {
+    assert.deepEqual(mesh.instanceColor.colors, lampLevels.map(level => [level, level, level]));
+    assert.equal(mesh.instanceColor.needsUpdate, true);
+  }
+  lights.forEach((light, index) => assert.equal(light.intensity, 120 * lampLevels[index]));
+  const lanterns = meshes.find(mesh => mesh.material.emissive === '#ffc375');
+  const shader = { fragmentShader: '#include <emissivemap_fragment>' };
+  lanterns.material.onBeforeCompile(shader);
+  assert.match(shader.fragmentShader, /#ifdef USE_COLOR\s+totalEmissiveRadiance/,
+    'Three r160 enables USE_COLOR, not USE_INSTANCING_COLOR, in fragment shaders');
+  assert.match(shader.fragmentShader, /totalEmissiveRadiance \*= vColor/);
+  scene.draw(null, { time: 0, reducedMotion: true });
+  for (const mesh of meshes) assert.deepEqual(mesh.instanceColor.colors, layout.lamps.map(() => [1, 1, 1]));
+  lights.forEach(light => assert.equal(light.intensity, 120));
+  assert.equal(resources.length, resourceCount, 'the effect must not allocate GPU resources every frame');
+  scene.dispose();
+});

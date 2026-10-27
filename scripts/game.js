@@ -30,6 +30,7 @@ function resetLevel(isNewGame = false) {
     score = 0;
     lives = 3;
   }
+  if (isNewGame || !level256Glitch) level256Glitch = Level256Glitch.create({ ticksPerSecond: SIMULATION_HZ });
   loadMaze();
   GameRenderer.setMaze(maze);
   dotsLeft = 0;
