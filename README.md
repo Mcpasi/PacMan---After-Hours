@@ -8,6 +8,8 @@
 
 **256:** The mistakes of the past have returned; it seems unavoidable.
 
+We are currently investigating an error that we cannot explain; it seems the bug from the original game has returned.
+
 ## How to play
 
 - **Move:** Arrow keys or WASD
