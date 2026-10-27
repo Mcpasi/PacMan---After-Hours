@@ -18,7 +18,7 @@ const Level256GlitchArtwork = (() => {
     const cy = street ? (street.row + 0.5) * tile : height / 2;
     const x = Math.max(0, Math.min(width - patchWidth, cx - patchWidth / 2));
     const y = Math.max(0, Math.min(height - patchHeight, cy - patchHeight / 2));
-    const leftWidth = Math.min(tile * 5, width * 0.21);
+    const stripWidth = Math.min(tile * 5, width * 0.21);
 
     function cells(left, top, w, h, jagged, salt) {
       const step = Math.min(tile * 0.68, w / 3, h / 3);
@@ -43,7 +43,9 @@ const Level256GlitchArtwork = (() => {
     // Overflow digits and pixel fruit make the arcade reference recognizable.
     cluster.push({ kind: 'glyph', value: '256', x, y, size: Math.min(tile, patchHeight),
       width: Math.min(tile * 2, patchWidth), color: palette[0] });
-    const symbols = cells(0, height * 0.12, leftWidth, height * 0.76, true, 900);
+    // Anchor the broken edge on the right without mirroring the glyphs themselves.
+    const symbols = cells(0, height * 0.12, stripWidth, height * 0.76, true, 900)
+      .map(cell => ({ ...cell, x: width - cell.x - cell.size }));
     const lamps = Array.from({ length: layout.lamps.length }, (_, index) => index)
       .sort((a, b) => noise(a + 500, seed) - noise(b + 500, seed)).slice(0, 3);
     return { cluster, symbols, lamps };

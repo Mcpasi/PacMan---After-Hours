@@ -425,7 +425,7 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       for (let y = 0; y < surface.height; y++) for (let x = 0; x < surface.width; x++) {
         if (!pixels[(y * surface.width + x) * 4 + 3]) continue;
         visible++;
-        if (phase === 'symbols' && x >= Math.ceil(city.width * 0.21)) throw new Error('Symbols escaped the left edge');
+        if (phase === 'symbols' && x < Math.floor(city.width * 0.79)) throw new Error('Symbols escaped the right edge');
       }
       if (!visible || visible > city.width * city.height * 0.17) throw new Error('Corruption is invisible or covers too much');
       signatures.push(surface.toDataURL());
@@ -439,12 +439,12 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     level256Glitch.state.effect.age = 40;
     return new Set(signatures).size;
   })()`);
-  assert.equal(corruption, 2, 'local fragments and the left-edge memory strip must render distinctly');
+  assert.equal(corruption, 2, 'local fragments and the right-edge memory strip must render distinctly');
   // Render actual per-lamp instance colors and the emissive shader on the GPU too.
   await client.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   assert.equal(await client.evaluate("document.getElementById('gameCanvas').dataset.renderer"), testThree ? 'three' : 'canvas');
   await client.evaluate(`level256Glitch.state.effect = null;`);
-  t.diagnostic('Level-256-inspired fragments, left-edge bounds, cleanup, Canvas isolation and live lamp dimming verified.');
+  t.diagnostic('Level-256-inspired fragments, right-edge bounds, cleanup, Canvas isolation and live lamp dimming verified.');
 
   const deathArtwork = await client.evaluate(`(() => {
     const surface = document.createElement('canvas'); surface.width = surface.height = 256;

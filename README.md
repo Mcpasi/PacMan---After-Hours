@@ -6,6 +6,8 @@
 
 **Play Pac-Man - After Hours now:** In a dark, alternate world, Pac-Man tries to escape the ghosts; he can only temporarily daze them by using his power-ups. Can you reach the power-ups in time, before the ghosts catch you?
 
+**256:** The mistakes of the past have returned; it seems unavoidable.
+
 ## How to play
 
 - **Move:** Arrow keys or WASD

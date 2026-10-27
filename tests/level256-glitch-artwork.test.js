@@ -40,7 +40,8 @@ test('seeded fragments are deterministic, local, contain pixel fruits and leave 
     for (const [kind, cells] of [['cluster', pattern.cluster], ['symbols', pattern.symbols]]) {
       for (const cell of cells) {
         assert.ok(cell.x >= 0 && cell.y >= 0);
-        assert.ok(cell.x + (cell.width || cell.size) <= (kind === 'symbols' ? layout.width * 0.21 : layout.width) + 1e-7);
+        assert.ok(cell.x + (cell.width || cell.size) <= layout.width + 1e-7);
+        if (kind === 'symbols') assert.ok(cell.x >= layout.width * 0.79 - 1e-7);
         assert.ok(cell.y + cell.size <= layout.height);
       }
     }
@@ -61,6 +62,22 @@ test('small and lampless layouts still produce bounded fragments without invalid
       assert.ok(cell.y + cell.size <= city.height + 1e-7);
     }
     assert.equal(Artwork.create(city).frame(effect).lampLevels.length, city.lamps.length);
+  }
+});
+
+test('the symbol strip hugs the right edge at every scale without mirroring its glyphs', () => {
+  for (const tile of [12, 16, 64]) {
+    for (const grid of [maze, [[0]], [[0, 1], [1, 0]]]) {
+      const city = CityLayout.create(grid, tile);
+      const artwork = Artwork.create(city);
+      const visual = artwork.frame({ ...effect, phase: 'symbols', age: 20, duration: 48 });
+      const leftBoundary = city.width - Math.min(tile * 5, city.width * 0.21);
+      assert.ok(visual.cells.every(cell => cell.x >= leftBoundary - 1e-7));
+      assert.ok(Math.abs(Math.max(...visual.cells.map(cell => cell.x + cell.size)) - city.width) < 1e-7);
+      const calls = paint(artwork, visual);
+      assert.ok(calls.filter(([method]) => method === 'fillText').every(([, , x]) => x >= leftBoundary - 1e-7));
+      assert.equal(calls.some(([method]) => ['scale', 'transform', 'setTransform'].includes(method)), false);
+    }
   }
 });
 

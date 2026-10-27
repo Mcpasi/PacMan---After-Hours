@@ -27,7 +27,7 @@ test('the first glitch waits a random 45–75 active seconds, independently of a
   }
 });
 
-test('lamps, local corruption and left symbols run in order for about four seconds, then disappear completely', () => {
+test('lamps, local corruption and right symbols run in order for about four seconds, then disappear completely', () => {
   for (const ticksPerSecond of [20, 60, 120]) {
     const glitch = Level256Glitch.create({ ticksPerSecond, random: () => 0.5 });
     advance(glitch, glitch.state.ticksUntilGlitch);
