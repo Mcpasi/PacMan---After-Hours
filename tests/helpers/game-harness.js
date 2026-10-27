@@ -31,14 +31,25 @@ function boot(options = {}) {
   class Element {
     constructor() {
       this.style = {}; this.dataset = {}; this.listeners = new Map(); this.children = [];
+      const classes = new Set();
+      this.classList = {
+        toggle(name, active) { if (active) classes.add(name); else classes.delete(name); },
+        contains(name) { return classes.has(name); }
+      };
+      this.attributes = new Map();
       this.context2d = makeContext();
     }
+    setAttribute(name, value) { this.attributes.set(name, String(value)); }
+    getAttribute(name) { return this.attributes.get(name) ?? null; }
     addEventListener(type, listener) {
       if (!this.listeners.has(type)) this.listeners.set(type, []);
       this.listeners.get(type).push(listener);
     }
     emit(type, event = {}) {
-      for (const listener of this.listeners.get(type) || []) listener(event);
+      for (const listener of this.listeners.get(type) || []) {
+        listener(event);
+        if (event.immediatePropagationStopped) break;
+      }
       if (type === 'click' && this.onclick) this.onclick(event);
     }
     appendChild(child) { child.parentNode = this; this.children.push(child); }
@@ -51,7 +62,7 @@ function boot(options = {}) {
     }
     get innerHTML() { return this.html || ''; }
   }
-  for (const id of ['gameCanvas', 'gameViewport', 'score', 'highScore', 'lives', 'overlay', 'startBtn']) {
+  for (const id of ['gameContainer', 'fullscreenBtn', 'gameCanvas', 'gameViewport', 'score', 'highScore', 'lives', 'overlay', 'startBtn']) {
     elements.set(id, new Element());
   }
   elements.get('gameViewport').appendChild(elements.get('gameCanvas'));
@@ -76,6 +87,7 @@ function boot(options = {}) {
   if (options.webgl) window.WebGLRenderingContext = function () {};
   if (options.audio !== 'missing') window[options.audio === 'webkit' ? 'webkitAudioContext' : 'AudioContext'] = AudioContext;
   const document = new Element();
+  document.body = new Element();
   document.getElementById = id => elements.get(id) || null;
   document.createElement = () => new Element();
   const sandbox = {
@@ -110,8 +122,9 @@ function boot(options = {}) {
   return {
     run, elements, frames, drawing, storage, frameAt,
     click(id = 'startBtn') { elements.get(id).emit('click'); },
-    key(key, repeat = false) {
-      const event = { key, repeat, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    key(key, repeat = false, target) {
+      const event = { key, repeat, target, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; },
+        stopImmediatePropagation() { this.immediatePropagationStopped = true; } };
       document.emit('keydown', event);
       return event;
     },

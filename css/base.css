@@ -1,4 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --screen-height: 100vh; }
+@supports (height: 100svh) { :root { --screen-height: 100svh; } }
+@supports (height: 100dvh) { :root { --screen-height: 100dvh; } }
 body {
   background: #060c12;
   background-image: radial-gradient(ellipse at 50% 35%, #1b2a30 0, #080e15 58%, #03070b 100%);
@@ -11,3 +14,4 @@ body {
   min-height: 100svh;
   padding: 12px;
 }
+body.game-expanded { overflow: hidden; }

@@ -11,6 +11,7 @@ function init() {
   }
   document.getElementById('highScore').textContent = 'HIGH: ' + highScore;
   document.getElementById('startBtn').addEventListener('click', startGame);
+  GameDisplay.init();
   initInput();
   loadMaze();
   resetLevel(true);

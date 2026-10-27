@@ -4,6 +4,9 @@
 .district-header h1 span { color: #e6ad64; }
 .district-time { color: #829b97; font-size: 9px; line-height: 1.7; text-align: right; white-space: nowrap; }
 .district-time b { color: #d4b482; font-weight: normal; }
+.district-tools { display: flex; align-items: center; gap: 10px; }
+#fullscreenBtn { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; padding: 0; color: #d4b482; background: #101b22; border-color: #425251; touch-action: manipulation; }
+#fullscreenBtn:hover, #fullscreenBtn[aria-pressed="true"] { background: #263535; border-color: #d4b482; }
 #ui { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 1px; margin-bottom: 9px; }
 #score { color: #e1d4b9; }
 #highScore { color: #8ba39e; }
@@ -30,4 +33,18 @@ button { margin-top: 22px; padding: 13px 21px; font-size: 11px; letter-spacing: 
 button span { margin-left: 12px; }
 button:hover { background: #f0d8a7; }
 button:focus-visible { outline: 2px solid #f6e4bc; outline-offset: 5px; }
+@media (max-width: 700px), (max-height: 500px) {
+  .district-header { margin-bottom: 8px; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .district-header { grid-area: 1 / 1; flex-direction: column; align-items: flex-start; margin: 0; }
+  .district-header h1 { font-size: clamp(18px, 3vw, 22px); }
+  #ui { grid-area: 2 / 1; flex-direction: column; justify-content: flex-start; gap: 8px; margin: 0; }
+  .status-bar { grid-area: 3 / 1; flex-wrap: wrap; }
+  #overlay { padding: 8px; }
+  #overlay h1, #overlay h2 { font-size: clamp(24px, 8vh, 40px); margin: 10px 0; }
+  #overlay p { margin: 3px 0; line-height: 1.4; }
+  #overlay .controls { margin-top: 8px; }
+  #overlay button { margin-top: 10px; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

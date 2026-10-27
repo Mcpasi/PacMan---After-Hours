@@ -24,6 +24,7 @@ function onKeyDown(e) {
     return;
   }
   if (key === 'enter' || key === ' ') {
+    if (e.target === document.getElementById('fullscreenBtn')) return;
     e.preventDefault(); // Do not also activate a focused (possibly hidden) button.
     if (e.repeat) return;
     if (gameState === 'title' || gameState === 'gameOver') startGame();

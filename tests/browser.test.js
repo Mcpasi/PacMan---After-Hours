@@ -47,8 +47,8 @@ async function connect(url) {
   }
   return {
     send, errors, requests, close: () => socket.close(),
-    async evaluate(expression) {
-      const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+    async evaluate(expression, userGesture = false) {
+      const result = await send('Runtime.evaluate', { expression, userGesture, returnByValue: true, awaitPromise: true });
       assert.equal(result.exceptionDetails, undefined, JSON.stringify(result.exceptionDetails));
       return result.result.value;
     }
@@ -135,6 +135,60 @@ test('browser smoke: city, player and ghost artwork, search, movement, pause, mo
     assert.equal(await client.evaluate("document.querySelectorAll('.city-scene').length"), 1);
     t.diagnostic('Local Three.js city rendered with external resources blocked.');
   }
+
+  async function checkLayout(minWidth) {
+    const layout = await client.evaluate(`(() => {
+      const viewport = document.getElementById('gameViewport').getBoundingClientRect();
+      const surface = document.getElementById('gameCanvas').getBoundingClientRect();
+      const scene = document.querySelector('.city-scene')?.getBoundingClientRect();
+      const button = document.getElementById('startBtn') || document.getElementById('ovBtn');
+      const action = button.getBoundingClientRect();
+      const fullscreen = document.getElementById('fullscreenBtn').getBoundingClientRect();
+      return { width: viewport.width, height: viewport.height,
+        fits: viewport.left >= 0 && viewport.top >= 0 && viewport.right <= innerWidth + 1 && viewport.bottom <= innerHeight + 1 &&
+          document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight,
+        ratio: surface.width / surface.height, logicalSize: [canvas.width, canvas.height],
+        layersAligned: !scene || (Math.abs(scene.width - surface.width) < 1 && Math.abs(scene.height - surface.height) < 1),
+        actionFits: action.left >= viewport.left && action.right <= viewport.right && action.top >= viewport.top && action.bottom <= viewport.bottom,
+        controlFits: fullscreen.width >= 44 && fullscreen.height >= 44 && fullscreen.left >= 0 && fullscreen.right <= innerWidth &&
+          fullscreen.top >= 0 && fullscreen.bottom <= innerHeight };
+    })()`);
+    assert.ok(layout.width >= minWidth, `mobile map must use available space: ${JSON.stringify(layout)}`);
+    assert.equal(layout.fits, true, 'the complete map must fit without page scrolling');
+    assert.ok(Math.abs(layout.ratio - 28 / 31) < 0.001, 'the map must not be stretched');
+    assert.deepEqual(layout.logicalSize, [448, 496], 'resizing must not change gameplay coordinates');
+    assert.equal(layout.layersAligned, true, 'WebGL scenery and Canvas actors must remain aligned');
+    assert.equal(layout.actionFits, true, 'the overlay action must stay inside the map');
+    assert.equal(layout.controlFits, true, 'fullscreen must be reachable with a 44px touch target');
+    return layout;
+  }
+
+  // Exercise the no-API path used by iPhones and restricted embeds, including rotation.
+  await client.evaluate(`for (const key of ['requestFullscreen', 'webkitRequestFullscreen']) {
+    Object.defineProperty(document.getElementById('gameContainer'), key, { value: undefined, configurable: true });
+  }`);
+  for (const [width, height, minWidth] of [[390, 844, 370], [844, 390, 330], [320, 568, 300], [568, 320, 270]]) {
+    await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: true });
+    const layout = await checkLayout(minWidth);
+    await client.evaluate("document.getElementById('fullscreenBtn').click()");
+    assert.equal(await client.evaluate("document.getElementById('fullscreenBtn').getAttribute('aria-pressed')"), 'true');
+    await checkLayout(minWidth);
+    assert.equal(await client.evaluate('gameState'), 'title', 'fullscreen must not start or reset the game');
+    await client.evaluate("document.getElementById('fullscreenBtn').click()");
+    assert.equal(await client.evaluate("document.getElementById('gameContainer').classList.contains('is-expanded')"), false);
+    t.diagnostic(`Mobile ${width}x${height}: full map ${Math.round(layout.width)}x${Math.round(layout.height)}.`);
+  }
+  await client.evaluate("document.getElementById('fullscreenBtn').focus()");
+  for (const [key, code, keyCode, expanded] of [['Enter', 'Enter', 13, true], [' ', 'Space', 32, false]]) {
+    await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, text: key === 'Enter' ? '\r' : ' ' });
+    await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode });
+    assert.equal(await client.evaluate("document.getElementById('gameContainer').classList.contains('is-expanded')"), expanded, `fullscreen keyboard activation: ${code}`);
+    assert.equal(await client.evaluate('gameState'), 'title', 'focused fullscreen controls must retain native keyboard activation');
+  }
+  await client.evaluate(`for (const key of ['requestFullscreen', 'webkitRequestFullscreen']) {
+    delete document.getElementById('gameContainer')[key];
+  }`);
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
   await client.evaluate("document.getElementById('startBtn').click()");
   await waitFor(() => client.evaluate('score > 0 && player.x > 13.5 * TILE'), 'Pac-Man did not move and collect dots.');
   await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'p' });
@@ -143,6 +197,15 @@ test('browser smoke: city, player and ghost artwork, search, movement, pause, mo
   const position = await client.evaluate('player.x');
   await client.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   assert.equal(await client.evaluate('player.x'), position);
+
+  const beforeFullscreen = await client.evaluate('JSON.stringify({ gameState, player, ghosts, maze, score, lives, level })');
+  await client.evaluate("document.getElementById('fullscreenBtn').click()", true);
+  await waitFor(() => client.evaluate("document.fullscreenElement === document.getElementById('gameContainer')"), 'Native fullscreen did not activate.');
+  await checkLayout(680);
+  await client.evaluate('document.exitFullscreen()');
+  await waitFor(() => client.evaluate("!document.getElementById('gameContainer').classList.contains('is-expanded')"), 'External fullscreen exit did not restore the layout.');
+  assert.equal(await client.evaluate('JSON.stringify({ gameState, player, ghosts, maze, score, lives, level })'), beforeFullscreen);
+  t.diagnostic('Native fullscreen and external exit preserve the paused game.');
 
   const ghostSearch = await client.evaluate(`(() => {
     resetLevel(false);
@@ -295,13 +358,9 @@ test('browser smoke: city, player and ghost artwork, search, movement, pause, mo
     assert.equal(await client.evaluate("document.querySelectorAll('.city-scene').length"), 0);
   }
 
-  for (const [width, height] of [[390, 844], [844, 390]]) {
+  for (const [width, height, minWidth] of [[390, 844, 370], [844, 390, 330]]) {
     await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
-    assert.ok(await client.evaluate(`(() => {
-      const rect = document.getElementById('gameViewport').getBoundingClientRect();
-      return rect.width > 100 && rect.left >= 0 && rect.right <= innerWidth &&
-        document.documentElement.scrollWidth <= innerWidth;
-    })()`), 'mobile layout must fit horizontally');
+    await checkLayout(minWidth);
   }
   await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
   await client.evaluate('gameState = "playing"; showOverlay(null);');
