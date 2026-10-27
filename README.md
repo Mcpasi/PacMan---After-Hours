@@ -61,6 +61,14 @@ All four ghosts have also received a new design and new colors from me.
  - Total tests: 156 passed, one optional 
    browser test skipped.
 
+**Fixed:** Added a full-screen toggle in the top-right corner, including an alternative view for browsers that do not support full-screen mode.
+
+- Improved mobile scaling, especially in 
+  landscape orientation.
+- The entire map remains visible and 
+  undistorted; graphics and game logic 
+  remain unchanged.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**
