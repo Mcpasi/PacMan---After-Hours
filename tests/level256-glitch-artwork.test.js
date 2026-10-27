@@ -65,6 +65,20 @@ test('small and lampless layouts still produce bounded fragments without invalid
   }
 });
 
+test('small corruption patches retain both pixel-fruit variants', () => {
+  for (const tile of [12, 16, 64]) {
+    for (const grid of [[[0]], [[1]], [[0, 1], [1, 0]],
+      Array.from({ length: 6 }, () => Array(6).fill(1))]) {
+      const city = CityLayout.create(grid, tile);
+      for (const seed of [0, 1, 256, 4294967295]) {
+        const pattern = Artwork.createPattern(city, seed);
+        assert.deepEqual(pattern.cluster.filter(cell => cell.kind === 'fruit').map(cell => cell.variant), [0, 1],
+          `${grid[0].length}×${grid.length}, tile=${tile}, seed=${seed}`);
+      }
+    }
+  }
+});
+
 test('the symbol strip hugs the right edge at every scale without mirroring its glyphs', () => {
   for (const tile of [12, 16, 64]) {
     for (const grid of [maze, [[0]], [[0, 1], [1, 0]]]) {
@@ -196,3 +210,24 @@ test('the shared renderer passes per-lamp dimming to the environment and hides c
   game.respawn(); game.advance();
   assert.equal(game.run('lightFrames.at(-1).filter(level => level < 1).length'), 3);
 });
+
+for (const initial of [false, true]) {
+  test(`an active glitch follows reduced-motion changes without reloading (initially ${initial})`, () => {
+    const game = boot({ random: () => 0, reducedMotion: initial }); game.click(); game.key('p');
+    game.run(`globalThis.lightFrames = [];
+      GameRenderer.setEnvironment({ setLayout() {}, draw(ctx, frame) { lightFrames.push(frame); } });
+      level256Glitch.state.ticksUntilGlitch = 1; level256Glitch.update();
+      level256Glitch.state.effect.age = 40;`);
+    const before = game.run('JSON.stringify(level256Glitch.state)');
+    for (const reducedMotion of [initial, !initial, initial]) {
+      game.setReducedMotion(reducedMotion);
+      game.advance();
+      assert.equal(game.run('lightFrames.at(-1).reducedMotion'), reducedMotion);
+      const levels = JSON.parse(game.run('JSON.stringify(lightFrames.at(-1).lampLevels.filter(level => level < 1))'));
+      assert.equal(levels.length, 3);
+      if (reducedMotion) assert.deepEqual(levels, [0.72, 0.72, 0.72]);
+      else assert.notDeepEqual(levels, [0.72, 0.72, 0.72]);
+      assert.equal(game.run('JSON.stringify(level256Glitch.state)'), before);
+    }
+  });
+}

@@ -82,7 +82,8 @@ function boot(options = {}) {
     }
   }
   const window = new Element();
-  window.matchMedia = () => ({ matches: !!options.reducedMotion });
+  const motionPreference = { matches: !!options.reducedMotion };
+  window.matchMedia = () => motionPreference;
   if (options.webgl) window.WebGLRenderingContext = function () {};
   if (options.audio !== 'missing') window[options.audio === 'webkit' ? 'webkitAudioContext' : 'AudioContext'] = AudioContext;
   const document = new Element();
@@ -120,6 +121,7 @@ function boot(options = {}) {
   }
   return {
     run, elements, frames, drawing, storage, frameAt,
+    setReducedMotion(value) { motionPreference.matches = !!value; },
     click(id = 'startBtn') { elements.get(id).emit('click'); },
     key(key, repeat = false, target) {
       const event = { key, repeat, target, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; },

@@ -23,17 +23,20 @@ const Level256GlitchArtwork = (() => {
     function cells(left, top, w, h, jagged, salt) {
       const step = Math.min(tile * 0.68, w / 3, h / 3);
       const columns = Math.floor(w / step), rows = Math.floor(h / step);
+      const lastIndex = columns * rows - 1;
+      const fruitIndices = [Math.min(5, lastIndex - 1), Math.min(27, lastIndex)];
       const result = [];
       for (let row = 0; row < rows; row++) {
         const end = jagged ? Math.max(1, columns - Math.floor(noise(row + salt, seed) * 3)) : columns;
         for (let col = 0; col < end; col++) {
           const index = row * columns + col;
           const n = noise(index + salt, seed);
-          if (n < 0.14 && index !== 5 && index !== 27) continue;
+          const fruit = fruitIndices.indexOf(index);
+          if (n < 0.14 && fruit === -1) continue;
           result.push({ x: left + col * step, y: top + row * step, size: step,
-            kind: index === 5 || index === 27 ? 'fruit' : n > 0.84 ? 'block' : 'glyph',
+            kind: fruit !== -1 ? 'fruit' : n > 0.84 ? 'block' : 'glyph',
             value: glyphs[Math.floor(noise(index + salt + 201, seed) * glyphs.length)],
-            variant: index === 5 ? 0 : 1, color: palette[Math.floor(n * palette.length)] });
+            variant: fruit === 0 ? 0 : 1, color: palette[Math.floor(n * palette.length)] });
         }
       }
       return result;

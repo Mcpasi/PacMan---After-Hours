@@ -443,8 +443,22 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   // Render actual per-lamp instance colors and the emissive shader on the GPU too.
   await client.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   assert.equal(await client.evaluate("document.getElementById('gameCanvas').dataset.renderer"), testThree ? 'three' : 'canvas');
+  await client.evaluate(`globalThis.currentReducedMotion = null;
+    GameRenderer.setActors({ player(ctx, player, options) {
+      currentReducedMotion = options.reducedMotion;
+      ClassicActors.player(ctx, player, options);
+    } });`);
+  const frozenGlitch = await client.evaluate('JSON.stringify(level256Glitch.state)');
+  for (const [value, expected] of [['reduce', true], ['no-preference', false]]) {
+    await client.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value }] });
+    await waitFor(() => client.evaluate(`currentReducedMotion === ${expected}`),
+      `The running glitch did not adopt prefers-reduced-motion: ${value}.`);
+    assert.equal(await client.evaluate('JSON.stringify(level256Glitch.state)'), frozenGlitch);
+  }
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+  await client.evaluate('GameRenderer.setActors({ player: ClassicActors.player }); delete globalThis.currentReducedMotion;');
   await client.evaluate(`level256Glitch.state.effect = null;`);
-  t.diagnostic('Level-256-inspired fragments, right-edge bounds, cleanup, Canvas isolation and live lamp dimming verified.');
+  t.diagnostic('Level-256-inspired fragments, right-edge bounds, cleanup, Canvas isolation, live lamp dimming and reduced-motion changes verified.');
 
   const deathArtwork = await client.evaluate(`(() => {
     const surface = document.createElement('canvas'); surface.width = surface.height = 256;

@@ -2,7 +2,7 @@ const GameRenderer = (() => {
   let fallback, environment, layout, surface, glitchArtwork;
   let actors = { ...ClassicActors };
   let time = 0, previousTime = null, generation = 0;
-  let reducedMotion = false;
+  let motionPreference;
 
   function setEnvironment(next) {
     if (!next || typeof next.draw !== 'function' || typeof next.setLayout !== 'function') {
@@ -22,7 +22,7 @@ const GameRenderer = (() => {
 
   function init(canvas) {
     surface = canvas;
-    reducedMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     fallback = CanvasCity.create({ createCanvas: () => document.createElement('canvas') });
     setEnvironment(fallback);
     // Both modules are bundled locally, so GPU rendering also works offline.
@@ -80,6 +80,7 @@ const GameRenderer = (() => {
     const delta = previousTime === null ? 0 : Math.max(0, Math.min(100, timestamp - previousTime));
     previousTime = timestamp;
     if (state.gameState !== 'paused') time += delta / 1000;
+    const reducedMotion = !!motionPreference?.matches;
     const glitch = glitchArtwork.frame(state.level256Glitch, { reducedMotion });
     const frame = { time, reducedMotion, lampLevels: glitch?.lampLevels };
     const ctx = surface.getContext('2d');
