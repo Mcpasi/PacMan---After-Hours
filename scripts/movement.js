@@ -113,17 +113,10 @@ function checkCollisions() {
       } else {
         // die
         player.alive = false;
+        playerDeath = PlayerDeath.create(player, { ticksPerSecond: SIMULATION_HZ });
         lives--;
         playDeath();
         updateUI();
-        setTimeout(() => {
-          if (lives <= 0) {
-            gameState = 'gameOver';
-            showOverlay('GAME OVER', `Final Score: ${score}`, 'RESTART');
-          } else {
-            resetActors();
-          }
-        }, 1500);
       }
     }
   });

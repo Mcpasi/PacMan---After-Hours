@@ -90,6 +90,7 @@ const GameRenderer = (() => {
     actors.player(ctx, state.player, options);
     actors.ghosts(ctx, state.ghosts, options);
     fallback.drawAtmosphere(ctx, frame);
+    PlayerDeathArtwork.draw(ctx, state.playerDeath, options);
     BonusLifeArtwork.drawEffect(ctx, state.bonusLife?.effect, options);
   }
 

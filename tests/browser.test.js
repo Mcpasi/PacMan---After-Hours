@@ -64,7 +64,7 @@ async function waitFor(check, message, timeout = 20000) {
   throw new Error(message);
 }
 
-test('browser smoke: city, player and ghost artwork, search, movement, pause, mobile layout and offline fallback', {
+test('browser smoke: city, actors, death fragments, search, movement, pause, mobile layout and offline fallback', {
   skip: !executable && 'Set PACMAN_BROWSER to a Chromium executable.', timeout: 90000
 }, async t => {
   let browser, client, profile;
@@ -344,6 +344,62 @@ test('browser smoke: city, player and ghost artwork, search, movement, pause, mo
   assert.equal(bonus.unique, 2, 'coin rotation must change the real Canvas image');
   assert.equal(bonus.icons, bonus.lives);
   t.diagnostic('Bonus coin, rotation, reduced motion, collection effect and extra HUD life verified.');
+
+  const deathArtwork = await client.evaluate(`(() => {
+    const surface = document.createElement('canvas'); surface.width = surface.height = 256;
+    const ctx = surface.getContext('2d'), signatures = [], reduced = [];
+    const preview = document.createElement('canvas'); preview.width = 1024; preview.height = 512;
+    const previewContext = preview.getContext('2d');
+    previewContext.fillStyle = '#101b22'; previewContext.fillRect(0, 0, preview.width, preview.height);
+    const before = JSON.stringify({ player, maze, ghosts, score, lives, playerDeath });
+    for (const reducedMotion of [false, true]) {
+      for (const [column, age] of [0, 15, 30, 80].entries()) {
+        const effect = PlayerDeath.create({ x: 128, y: 128, dir: 0, mouth: 0.3 }).state;
+        effect.age = age;
+        ctx.clearRect(0, 0, 256, 256); ctx.fillStyle = '#123456'; ctx.lineWidth = 3; ctx.globalAlpha = 0.75;
+        PlayerDeathArtwork.draw(ctx, effect, { tile: 40, reducedMotion });
+        if (ctx.fillStyle !== '#123456' || ctx.lineWidth !== 3 || ctx.globalAlpha !== 0.75 || !ctx.getTransform().isIdentity) {
+          throw new Error('Death fragments leaked Canvas state');
+        }
+        const pixels = ctx.getImageData(0, 0, 256, 256).data;
+        if (!pixels.some(value => value > 0)) throw new Error('Invisible death fragments at age ' + age);
+        if (!reducedMotion && age === 30 && ctx.getImageData(128, 128, 1, 1).data[3] !== 0) {
+          throw new Error('Body pieces did not separate from the impact point');
+        }
+        (reducedMotion ? reduced : signatures).push(surface.toDataURL());
+        previewContext.drawImage(surface, column * 256, reducedMotion ? 256 : 0);
+      }
+    }
+    if (reduced[0] !== reduced[1] || reduced[1] !== reduced[2]) throw new Error('Reduced-motion fragments still move');
+    ctx.clearRect(0, 0, 256, 256);
+    const expired = PlayerDeath.create({ x: 128, y: 128, dir: 0, mouth: 0.3 }).state;
+    expired.age = expired.duration;
+    PlayerDeathArtwork.draw(ctx, expired, { tile: 40 });
+    if (ctx.getImageData(0, 0, 256, 256).data.some(value => value)) throw new Error('Expired death effect still draws');
+    if (JSON.stringify({ player, maze, ghosts, score, lives, playerDeath }) !== before) throw new Error('Death artwork changed gameplay');
+    return { unique: new Set(signatures).size,
+      preview: ${process.env.PACMAN_DEATH_SCREENSHOT ? 'preview.toDataURL()' : 'null'} };
+  })()`);
+  assert.equal(deathArtwork.unique, 4, 'flight, rotation and fading must change the real Canvas image');
+  if (process.env.PACMAN_DEATH_SCREENSHOT) {
+    await fs.writeFile(process.env.PACMAN_DEATH_SCREENSHOT, Buffer.from(deathArtwork.preview.split(',')[1], 'base64'));
+  }
+  t.diagnostic('Death fragments, separation, fading, reduced motion and Canvas isolation verified.');
+  const deathSound = await client.evaluate(`(async () => {
+    const audio = new OfflineAudioContext(1, 24000, 32000);
+    if (!PlayerDeathSound.play(audio)) throw new Error('Death sound failed to schedule on Web Audio');
+    const buffer = await audio.startRendering(), samples = buffer.getChannelData(0);
+    let peak = 0, energy = 0, tail = 0;
+    samples.forEach((sample, index) => {
+      peak = Math.max(peak, Math.abs(sample)); energy += sample * sample;
+      if (index >= audio.sampleRate * 0.55) tail = Math.max(tail, Math.abs(sample));
+    });
+    return { peak, energy, tail };
+  })()`);
+  assert.ok(deathSound.peak > 0.01 && deathSound.peak < 1, 'the synthesized sound must be audible without clipping');
+  assert.ok(deathSound.energy > 1, 'Web Audio must render the crack and falling tones');
+  assert.ok(deathSound.tail < 0.001, 'the sound must end cleanly before respawn');
+  t.diagnostic('Synthesized death sound rendered through Web Audio without clipping or a lingering tail.');
   await client.evaluate('resetLevel(false);');
 
   if (testThree) {

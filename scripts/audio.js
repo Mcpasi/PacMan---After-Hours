@@ -30,6 +30,6 @@ function playTone(freq, duration, type = 'square', vol = 0.08) {
 function playChomp() { playTone(400 + Math.random()*100, 0.06, 'square', 0.05); }
 function playPower() { playTone(200, 0.3, 'sawtooth', 0.1); playTone(300, 0.3, 'sawtooth', 0.08); }
 function playDeath() {
-  [400,350,300,250,200,150].forEach((f,i) => setTimeout(() => playTone(f, 0.15, 'sine', 0.1), i*120));
+  if (!PlayerDeathSound.play(audioCtx)) audioCtx = null;
 }
 function playGhostEat() { playTone(600, 0.1, 'square', 0.1); }

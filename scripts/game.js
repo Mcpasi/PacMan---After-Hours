@@ -42,6 +42,7 @@ function resetLevel(isNewGame = false) {
 
 function resetActors() {
   resetSimulationClock();
+  playerDeath = null;
   player = {
     x: 13.5 * TILE, y: 22.5 * TILE,
     dir: 0, nextDir: 0, // 0=right,1=down,2=left,3=up
@@ -54,6 +55,17 @@ function resetActors() {
   powerTimer = 0;
   ghostEatCombo = 0;
   updateUI();
+}
+
+function updatePlayerDeath() {
+  if (!playerDeath || !playerDeath.update()) return;
+  playerDeath = null;
+  if (lives <= 0) {
+    gameState = 'gameOver';
+    showOverlay('GAME OVER', `Final Score: ${score}`, 'RESTART');
+  } else {
+    resetActors();
+  }
 }
 
 function nextLevel() {

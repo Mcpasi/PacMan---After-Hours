@@ -15,6 +15,10 @@ function loop(ts) {
     // Timestamp rounding must not defer a tick at exact 60 Hz boundaries.
     while (simulationAccumulator + 1e-7 >= SIMULATION_STEP && gameState === 'playing') {
       simulationAccumulator = Math.max(0, simulationAccumulator - SIMULATION_STEP);
+      if (playerDeath) {
+        updatePlayerDeath();
+        continue;
+      }
       animFrame++;
       updatePlayer();
       if (gameState !== 'playing') break;
@@ -23,9 +27,10 @@ function loop(ts) {
     }
   }
   if (gameState !== 'playing') simulationAccumulator = 0;
-  GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState, bonusLife: bonusLife.state });
+  GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState,
+    bonusLife: bonusLife.state, playerDeath: playerDeath?.state });
   // ready message
-  if (gameState === 'playing' && animFrame < 90) {
+  if (gameState === 'playing' && player.alive && animFrame < 90) {
     ctx.fillStyle = '#ffff00';
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';

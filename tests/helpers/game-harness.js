@@ -3,6 +3,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createAudioContext } = require('./audio-context');
 
 const root = path.join(__dirname, '../..');
 const revision = process.env.PACMAN_REVISION;
@@ -69,17 +70,9 @@ function boot(options = {}) {
   class AudioContext {
     constructor() {
       if (options.audio === 'throws') throw new Error('Audio unavailable');
-      this.currentTime = 0;
-      this.destination = {};
-      this.state = options.audio === 'suspended' ? 'suspended' : 'running';
-    }
-    resume() { this.state = 'running'; return Promise.resolve(); }
-    createOscillator() {
-      if (options.audio === 'toneThrows') throw new Error('Audio device lost');
-      return { frequency: { setValueAtTime() {} }, connect() {}, start() {}, stop() {} };
-    }
-    createGain() {
-      return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} };
+      const context = createAudioContext({ state: options.audio === 'suspended' ? 'suspended' : 'running' });
+      if (options.audio === 'toneThrows') context.createOscillator = () => { throw new Error('Audio device lost'); };
+      return context;
     }
   }
   const window = new Element();
@@ -137,6 +130,10 @@ function boot(options = {}) {
       }
     },
     respawn() {
+      if (run('typeof playerDeath !== "undefined" && playerDeath !== null')) {
+        run('while (playerDeath) updatePlayerDeath();');
+        return;
+      }
       const index = timers.findIndex(({ delay }) => delay === 1500);
       assert.notEqual(index, -1, 'death must schedule a respawn');
       const [timer] = timers.splice(index, 1);
