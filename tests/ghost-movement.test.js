@@ -40,7 +40,7 @@ test('a ghost crosses a corner without clipping a wall or losing fractional move
     assert.ok(ghost.x % tile === tile / 2 || ghost.y % tile === tile / 2);
   }
   assert.equal(ghost.x, 5.5 * tile);
-  assert.ok(Math.abs(ghost.y - (1.5 * tile + 40 * 1.5 - 2 * tile)) < 1e-6);
+  assert.ok(Math.abs(ghost.y - (1.5 * tile + 40 * GhostProfiles.get(ghost).speed - 2 * tile)) < 1e-6);
   assert.equal(ghost.dir, 1);
 });
 
@@ -48,7 +48,7 @@ test('dead ends reverse safely and an isolated ghost stays in its tile', () => {
   const controller = GhostController.create(corridor(10), tile), ghost = actor('blinky', 8, 3);
   controller.update([ghost], player(1, 3), false);
   assert.equal(ghost.dir, 2);
-  assert.equal(ghost.x, 8.5 * tile - 1.5);
+  assert.equal(ghost.x, 8.5 * tile - GhostProfiles.get(ghost).speed);
   const trapped = arena(5).map(row => row.map(() => 0));
   trapped[2][2] = 1;
   const isolated = actor('inky', 2, 2), before = { x: isolated.x, y: isolated.y };
@@ -62,7 +62,7 @@ test('both ghost tunnel directions preserve speed and wrap without an off-grid t
     const controller = GhostController.create(maze, tile), ghost = actor('blinky', dir === 0 ? 27 : 0, 11, dir);
     const pacman = player(dir === 0 ? 2 : 25, 11);
     for (let frame = 0; frame < 20; frame++) controller.update([ghost], pacman, false);
-    assert.ok(Math.abs(ghost.x - (dir === 0 ? 22 : 426)) < 1e-6, `direction ${dir}: ${ghost.x}`);
+    assert.ok(Math.abs(ghost.x - (dir === 0 ? 16 : 432)) < 1e-6, `direction ${dir}: ${ghost.x}`);
     assert.equal(ghost.y, 11.5 * tile);
   }
 });

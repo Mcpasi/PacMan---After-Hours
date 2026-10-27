@@ -31,7 +31,8 @@ for (const level of [1, 4, 12]) {
     let expected;
     for (const fps of rates) {
       const game = start(`level = ${level}; resetLevel(false);`);
-      const x = game.run('player.x'), speed = game.run('player.speed');
+      const x = game.run('player.x'), speed = { 1: 1.3, 4: 1.6, 12: 2.2 }[level];
+      assert.equal(game.run('player.speed'), speed);
       advanceUntil(game, 1000, fps);
       assert.equal(game.run('animFrame'), 60, `${fps} FPS`);
       assert.ok(Math.abs(game.run('player.x') - x - speed * 60) < 1e-6, `${fps} FPS`);
@@ -158,10 +159,10 @@ test('the first timestamp and duplicate timestamps do not advance simulation', (
 
 test('long frame gaps have bounded catch-up with no backlog on following frames', () => {
   const game = start();
-  const x = game.run('player.x');
+  const x = game.run('player.x'), speed = game.run('player.speed');
   game.frameAt(60000);
   assert.equal(game.run('animFrame'), 6);
-  assert.ok(Math.abs(game.run('player.x') - x - 6 * 1.6) < 1e-6);
+  assert.ok(Math.abs(game.run('player.x') - x - 6 * speed) < 1e-6);
   game.frameAt(60000);
   assert.equal(game.run('animFrame'), 6);
   game.frameAt(60000 + step);
@@ -170,7 +171,8 @@ test('long frame gaps have bounded catch-up with no backlog on following frames'
 
 test('catch-up checks collisions in every simulation tick and costs only one life', () => {
   const game = start(`ghosts = [ghosts[0]];
-    Object.assign(ghosts[0], { mode: 'chase', x: player.x + 28, y: player.y, dir: 2 });`);
+    Object.assign(ghosts[0], { mode: 'chase',
+      x: player.x + TILE * 0.7 + 5.5 * (player.speed + ghosts[0].speed), y: player.y, dir: 2 });`);
   game.frameAt(100);
   assert.equal(game.run('player.alive'), false);
   assert.equal(game.run('lives'), 2);

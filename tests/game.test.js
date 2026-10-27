@@ -21,7 +21,7 @@ test('after Start, Pac-Man moves and eats dots without input', () => {
 });
 
 test('centering does not undo movement, including fractional level speeds', () => {
-  for (const speed of [1.6, 1.7, 1.8, 1.9, 2.2]) {
+  for (const speed of [1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.2]) {
     const game = boot();
     game.run(`player.x = 13.5 * TILE; player.y = 22.5 * TILE; player.speed = ${speed};`);
     const x = game.run('player.x');
@@ -34,9 +34,11 @@ test('buffered turns happen at tile centers and walls stop movement', () => {
   const game = boot();
   game.click();
   game.run('player.x = 5.5 * TILE; player.y = 22.5 * TILE; player.dir = 0; player.nextDir = 3;');
-  game.run('for (let i = 0; i < 15; i++) updatePlayer();');
+  const distance = 20 * game.run('player.speed');
+  game.run('for (let i = 0; i < 20; i++) updatePlayer();');
   assert.ok(Math.abs(game.run('player.x') - 6.5 * 16) < 1e-6);
-  assert.ok(Math.abs(game.run('player.y') - 22 * 16) < 1e-6);
+  assert.ok(Math.abs(game.run('player.y') - (22.5 * 16 - (distance - 16))) < 1e-6);
+  assert.equal(game.run('player.dir'), 3);
   game.run('player.x = 26.5 * TILE; player.y = 22.5 * TILE; player.dir = player.nextDir = 0;');
   game.run('for (let i = 0; i < 40; i++) updatePlayer();');
   assert.equal(game.run('player.x'), 26.5 * 16);
@@ -46,10 +48,10 @@ test('reversing between tile centers is immediate', () => {
   const game = boot();
   game.click();
   game.run('player.y = 22.5 * TILE; updatePlayer();');
-  const x = game.run('player.x');
+  const x = game.run('player.x'), speed = game.run('player.speed');
   assert.equal(game.key('A').defaultPrevented, true);
   game.run('updatePlayer();');
-  assert.ok(Math.abs(game.run('player.x') - (x - 1.6)) < 1e-6);
+  assert.ok(Math.abs(game.run('player.x') - (x - speed)) < 1e-6);
 });
 
 test('both tunnel directions wrap without trapping the player', () => {

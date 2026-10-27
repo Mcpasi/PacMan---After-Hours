@@ -45,7 +45,7 @@ function resetActors() {
   player = {
     x: 13.5 * TILE, y: 22.5 * TILE,
     dir: 0, nextDir: 0, // 0=right,1=down,2=left,3=up
-    speed: getLevelSpeed(1.6, 0.1, 2.2), mouth: 0, mouthDir: 1, alive: true
+    speed: getLevelSpeed(1.3, 0.1, 2.2), mouth: 0, mouthDir: 1, alive: true
   };
   ghostController = GhostController.create(maze, TILE);
   ghosts = GhostProfiles.create(TILE);

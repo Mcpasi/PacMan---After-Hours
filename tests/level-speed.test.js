@@ -3,13 +3,17 @@ const test = require('node:test');
 const { boot } = require('./helpers/game-harness');
 
 const speedsByLevel = [
-  [1.6, [1.5, 1.44, 1.4, 1.36]],
-  [1.7, [1.58, 1.52, 1.48, 1.44]],
-  [1.8, [1.66, 1.6, 1.56, 1.52]],
-  [1.9, [1.74, 1.68, 1.64, 1.6]],
-  [2, [1.82, 1.76, 1.72, 1.68]],
-  [2.1, [1.9, 1.84, 1.8, 1.76]],
-  [2.2, [1.9, 1.9, 1.88, 1.84]],
+  [1.3, [1.2, 1.14, 1.1, 1.06]],
+  [1.4, [1.28, 1.22, 1.18, 1.14]],
+  [1.5, [1.36, 1.3, 1.26, 1.22]],
+  [1.6, [1.44, 1.38, 1.34, 1.3]],
+  [1.7, [1.52, 1.46, 1.42, 1.38]],
+  [1.8, [1.6, 1.54, 1.5, 1.46]],
+  [1.9, [1.68, 1.62, 1.58, 1.54]],
+  [2, [1.76, 1.7, 1.66, 1.62]],
+  [2.1, [1.84, 1.78, 1.74, 1.7]],
+  [2.2, [1.9, 1.86, 1.82, 1.78]],
+  [2.2, [1.9, 1.9, 1.9, 1.86]],
   [2.2, [1.9, 1.9, 1.9, 1.9]]
 ];
 
@@ -31,7 +35,7 @@ const controls = {
   Space: game => game.key(' ')
 };
 
-test('the title and a new game use the first-level speeds for every actor', () => {
+test('the title and a new game use the gentler first-level speeds for every actor', () => {
   const game = boot();
   assertSpeeds(game, 1);
   game.click();
@@ -42,7 +46,7 @@ for (const [name, proceed] of Object.entries(controls)) {
   test(`${name} advances cumulative level speeds up to their caps without changing score or lives`, () => {
     const game = boot();
     game.click();
-    for (let level = 2; level <= 12; level++) {
+    for (let level = 2; level <= speedsByLevel.length + 3; level++) {
       completeLevel(game);
       const score = game.run('score'), lives = game.run('lives');
       proceed(game);
@@ -126,7 +130,7 @@ for (const [name, restart] of Object.entries(controls)) {
 }
 
 test('level speeds affect actual player and ghost displacement, not only their properties', () => {
-  for (const level of [2, 3, 7, 12]) {
+  for (const level of [1, 2, 3, 7, 10, 11, 12]) {
     const game = boot();
     game.click();
     for (let next = 2; next <= level; next++) {
@@ -141,9 +145,13 @@ test('level speeds affect actual player and ghost displacement, not only their p
       const distance = game.run(`(() => {
         const ghost = ghosts[${index}];
         Object.assign(ghost, { x: 13.5 * TILE, y: 22.5 * TILE, dir: 0, mode: 'chase' });
-        const x = ghost.x;
-        for (let frame = 0; frame < 30; frame++) ghostController.update([ghost], player, false);
-        return ghost.x - x;
+        let distance = 0;
+        for (let frame = 0; frame < 30; frame++) {
+          const x = ghost.x, y = ghost.y;
+          ghostController.update([ghost], player, false);
+          distance += Math.abs(ghost.x - x) + Math.abs(ghost.y - y);
+        }
+        return distance;
       })()`);
       assert.ok(Math.abs(distance - 30 * ghostSpeeds[index]) < 1e-6, `level ${level}, ghost ${index}`);
     }
