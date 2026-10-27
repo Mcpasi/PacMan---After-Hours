@@ -11,7 +11,10 @@ function initInput() {
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('lostpointercapture', onPointerCancel);
-  // Also finish outside the canvas if the browser could not capture the pointer.
+  // Also steer and finish outside the canvas if pointer capture failed.
+  window.addEventListener('pointermove', e => {
+    if (e.target !== canvas) onPointerMove(e); // Canvas moves already ran before bubbling.
+  });
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerCancel);
   window.addEventListener('blur', resetPointerInput);
@@ -57,7 +60,7 @@ function onKeyUp(e) { keys[e.key.toLowerCase()] = false; }
 function onPointerDown(e) {
   if (pointerStart || gameState !== 'playing' || !player.alive || e.isPrimary === false) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY,
+  pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, dir: null, peak: null,
     touch: e.pointerType === 'touch' || e.pointerType === 'pen' };
   try {
     canvas.setPointerCapture(e.pointerId);
@@ -69,13 +72,28 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   if (!pointerStart || e.pointerId !== pointerStart.id) return;
   if (gameState !== 'playing' || !player.alive) { resetPointerInput(); return; }
-  const dx = e.clientX - pointerStart.x, dy = e.clientY - pointerStart.y;
+  let dx = e.clientX - pointerStart.x, dy = e.clientY - pointerStart.y;
+  // Measure a reversal from the finger's extreme, including sub-threshold motion,
+  // rather than making it cross back over the last accepted command's position.
+  if (pointerStart.dir !== null) {
+    const horizontal = pointerStart.dir % 2 === 0;
+    const position = horizontal ? e.clientX : e.clientY;
+    const delta = position - pointerStart.peak;
+    const forward = delta * (pointerStart.dir < 2 ? 1 : -1);
+    if (forward > 0) pointerStart.peak = position;
+    else if (forward < 0) {
+      if (horizontal) dx = delta;
+      else dy = delta;
+    }
+  }
   const ax = Math.abs(dx), ay = Math.abs(dy);
   if (Math.max(ax, ay) < SWIPE_THRESHOLD) return;
   // Keep the buffered direction while finger drift is too diagonal to be intentional.
   if (Math.max(ax, ay) < Math.min(ax, ay) * SWIPE_AXIS_BIAS) return;
   player.nextDir = ax > ay ? (dx > 0 ? 0 : 2) : (dy > 0 ? 1 : 3);
   player.touchTurn = pointerStart.touch ? player.nextDir : null;
+  pointerStart.dir = player.nextDir;
+  pointerStart.peak = ax > ay ? e.clientX : e.clientY;
   pointerStart.x = e.clientX;
   pointerStart.y = e.clientY;
 }

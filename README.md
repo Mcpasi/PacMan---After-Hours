@@ -77,7 +77,11 @@ All four ghosts have also received a new design and new colors from me.
 
 - More stable touch-based direction detection and more forgiving handling of turns in cases of slightly delayed input. 
 - Fixed issues with "tunnel" errors and stale touch inputs following interruptions.
-  
+
+**Touch fixed:**
+- Counter-swipe ignored: A 20-px counter-movement was not detected, despite a 12-px threshold. Now, the actual reversal point is what counts.      
+- Delayed control outside the area: In a simulated pointer-capture failure, the swipe only took effect upon release. Now, it reacts immediately.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**

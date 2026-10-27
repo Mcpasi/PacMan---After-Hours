@@ -235,11 +235,39 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   assert.equal(await client.evaluate('player.nextDir'), 0, 'capture must keep a swipe usable outside the canvas');
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.equal(await client.evaluate('pointerStart === null'), true);
+
+  for (const [dir, dx, dy] of [[0, 1, 0], [1, 0, 1], [2, -1, 0], [3, 0, -1]]) {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
+    for (const distance of [40, 51, 31]) {
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove',
+        touchPoints: [touch(touchOrigin.x + dx * distance, touchOrigin.y + dy * distance)] });
+    }
+    assert.equal(await client.evaluate('player.nextDir'), (dir + 2) % 4, `20px native touch reversal after direction ${dir}`);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+
+  const outsideTouch = await client.evaluate(`(() => {
+    player.nextDir = 0;
+    // Remove implicit touch capture too, so native events really leave the canvas.
+    canvas.setPointerCapture = id => { canvas.releasePointerCapture(id); throw new Error('Capture unavailable'); };
+    const bounds = canvas.getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2, y: bounds.top - 10 };
+  })()`);
+  try {
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
+    assert.equal(await client.evaluate('canvas.hasPointerCapture(pointerStart.id)'), false);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(outsideTouch.x, outsideTouch.y)] });
+    assert.equal(await client.evaluate('player.nextDir'), 3, 'uncaptured native touch must steer outside the canvas before release');
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.equal(await client.evaluate('pointerStart === null'), true);
+  } finally {
+    await client.evaluate('delete canvas.setPointerCapture');
+  }
   assert.deepEqual(await client.evaluate('[scrollX, scrollY]'), [0, 0], 'touch steering must not scroll the page');
   await client.evaluate('gameState = "paused"; resetLevel(false); showOverlay("PAUSED");');
   await client.send('Emulation.setTouchEmulationEnabled', { enabled: false });
   await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
-  t.diagnostic('Native mobile swipes, diagonal drift, multitouch, cancellation and outside-canvas capture verified.');
+  t.diagnostic('Native mobile swipes, reversals, diagonal drift, multitouch, cancellation and outside-canvas capture/fallback verified.');
 
   const ghostSearch = await client.evaluate(`(() => {
     resetLevel(false);

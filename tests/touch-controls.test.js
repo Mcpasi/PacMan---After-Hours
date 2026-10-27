@@ -65,6 +65,37 @@ test('diagonal finger drift cannot overwrite a buffered turn, but a clear contin
   assert.equal(game.run('player.nextDir'), 3, 'reversing does not require lifting the finger');
 });
 
+test('touch reversals measure the threshold from the latest finger extreme in every direction', () => {
+  for (let dir = 0; dir < 4; dir++) {
+    const game = start();
+    const [dx, dy] = directions[dir];
+    const move = distance => game.pointer('pointermove', 100 + dx * distance, 100 + dy * distance);
+    game.pointer('pointerdown', 100, 100);
+    move(40);
+    assert.equal(game.run('player.nextDir'), dir);
+    for (const distance of [43, 47, 51, 50, 47, 44, 40]) {
+      move(distance);
+      assert.equal(game.run('player.nextDir'), dir, 'less than 12px of reversal must not steer');
+    }
+    move(39);
+    assert.equal(game.run('player.nextDir'), (dir + 2) % 4, '12px from the extreme must reverse');
+    move(31);
+    assert.equal(game.run('player.nextDir'), (dir + 2) % 4, 'a 20px reversal must not be lost');
+  }
+});
+
+test('small diagonal moves and their release stay ambiguous after an accepted swipe', () => {
+  const game = start();
+  game.pointer('pointerdown', 100, 100);
+  game.pointer('pointermove', 140, 100);
+  for (const distance of [3, 6, 9, 12, 15]) {
+    game.pointer('pointermove', 140 + distance, 100 + distance);
+    assert.equal(game.run('player.nextDir'), 0);
+  }
+  game.pointer('pointerup', 155, 115);
+  assert.equal(game.run('player.nextDir'), 0);
+});
+
 test('a second pointer cannot replace an active swipe, even if it reports itself as primary', () => {
   const game = start();
   game.pointer('pointerdown', 100, 100);
@@ -135,6 +166,19 @@ test('a failed pointer capture is harmless and releasing outside the canvas stil
   assert.equal(game.run('player.nextDir'), 2);
   game.pointer('pointermove', 100, 140);
   assert.equal(game.run('player.nextDir'), 2);
+});
+
+test('a failed capture still steers outside the canvas before release and ignores other pointers', () => {
+  const game = start();
+  game.elements.get('gameCanvas').setPointerCapture = () => { throw new Error('Inactive pointer'); };
+  game.pointer('pointerdown', 100, 100);
+  game.run('window.emit("pointermove", { pointerId: 2, clientX: 60, clientY: 100 });');
+  assert.equal(game.run('player.nextDir'), 0);
+  game.run('window.emit("pointermove", { pointerId: 1, clientX: 60, clientY: 100 });');
+  assert.equal(game.run('player.nextDir'), 2, 'the held finger must steer without waiting for pointerup');
+  game.run('window.emit("pointercancel", { pointerId: 1 });');
+  game.run('window.emit("pointermove", { pointerId: 1, clientX: 60, clientY: 140 });');
+  assert.equal(game.run('player.nextDir'), 2, 'outside movement must not revive a cancelled swipe');
 });
 
 test('non-primary fingers, right mouse buttons and inactive games do not start swipes', () => {
