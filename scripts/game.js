@@ -41,11 +41,12 @@ function resetLevel(isNewGame = false) {
 }
 
 function resetActors() {
+  resetPointerInput();
   resetSimulationClock();
   playerDeath = null;
   player = {
     x: 13.5 * TILE, y: 22.5 * TILE,
-    dir: 0, nextDir: 0, // 0=right,1=down,2=left,3=up
+    dir: 0, nextDir: 0, touchTurn: null, // 0=right,1=down,2=left,3=up
     speed: getLevelSpeed(1.3, 0.1, 2.2), mouth: 0, mouthDir: 1, alive: true
   };
   ghostController = GhostController.create(maze, TILE);

@@ -56,6 +56,12 @@ function boot(options = {}) {
     appendChild(child) { child.parentNode = this; this.children.push(child); }
     getContext() { return this.context2d; }
     setPointerCapture(id) { this.capturedPointer = id; }
+    hasPointerCapture(id) { return this.capturedPointer === id; }
+    releasePointerCapture(id) {
+      if (!this.hasPointerCapture(id)) return;
+      delete this.capturedPointer;
+      this.emit('lostpointercapture', { pointerId: id });
+    }
     set innerHTML(value) {
       this.children = [];
       this.html = value;
@@ -121,8 +127,9 @@ function boot(options = {}) {
       document.emit('keydown', event);
       return event;
     },
-    pointer(type, x, y, id = 1) {
-      elements.get('gameCanvas').emit(type, { clientX: x, clientY: y, pointerId: id, pointerType: 'touch', isPrimary: true });
+    pointer(type, x, y, id = 1, options = {}) {
+      elements.get('gameCanvas').emit(type, { clientX: x, clientY: y, pointerId: id,
+        pointerType: 'touch', isPrimary: true, button: 0, ...options });
     },
     advance(count = 1) {
       for (let i = 0; i < count; i++) {

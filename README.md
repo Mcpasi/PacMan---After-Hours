@@ -73,6 +73,11 @@ All four ghosts have also received a new design and new colors from me.
 
 **added:** Upon contact with a ghost, Pac-Man breaks apart into nine flying fragments, accompanied by a splintering sound.
 
+**Fixed**
+
+- More stable touch-based direction detection and more forgiving handling of turns in cases of slightly delayed input. 
+- Fixed issues with "tunnel" errors and stale touch inputs following interruptions.
+  
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**

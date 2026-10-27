@@ -1,6 +1,7 @@
 function showOverlay(title, msg = '', btn = 'CONTINUE') {
   const ov = document.getElementById('overlay');
   if (!title) { ov.style.display = 'none'; return; }
+  resetPointerInput();
   ov.style.display = 'flex';
   ov.innerHTML = `<h1>${title}</h1><p>${msg}</p><button id="ovBtn">${btn}</button>`;
   document.getElementById('ovBtn').onclick = () => {

@@ -4,17 +4,42 @@ const DIRS = [[1,0],[0,1],[-1,0],[0,-1]];
 function canMove(x, y, dir, isGhost = false) {
   const nx = x + DIRS[dir][0] * TILE * 0.6;
   const ny = y + DIRS[dir][1] * TILE * 0.6;
-  const c = Math.floor(nx / TILE);
+  let c = Math.floor(nx / TILE);
   const r = Math.floor(ny / TILE);
-  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return true; // tunnel
+  if (r < 0 || r >= ROWS) return false;
+  if (c < 0 || c >= COLS) {
+    // Tunnels only wrap horizontally, between open edges. A buffered turn must
+    // not send the player vertically off-grid at the outside tunnel center.
+    if (dir % 2 !== 0 || maze[r][0] === 0 || maze[r][COLS - 1] === 0) return false;
+    c = (c % COLS + COLS) % COLS;
+  }
   const cell = maze[r][c];
   if (cell === 0) return false;
   if (cell === 4 && !isGhost) return false; // player can't enter door
   return true;
 }
 
+function applyTouchTurn() {
+  const dir = player.touchTurn;
+  player.touchTurn = null; // Forgiveness is only considered for a fresh swipe command.
+  if (!Number.isInteger(dir) || dir !== player.nextDir || dir % 2 === player.dir % 2 || player.speed <= 0) return;
+  const c = Math.floor(player.x / TILE), r = Math.floor(player.y / TILE);
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS || maze[r][c] === 0 || maze[r][c] === 4) return;
+  const cx = (c + 0.5) * TILE, cy = (r + 0.5) * TILE;
+  const dx = player.x - cx, dy = player.y - cy;
+  const along = dx * DIRS[player.dir][0] + dy * DIRS[player.dir][1];
+  const across = player.dir % 2 === 0 ? dy : dx;
+  // Recover a just-missed junction, never an early turn or a distant one.
+  // Both streets must still meet at a legal center; walls and doors stay solid.
+  if (along > 1e-6 && along <= TILE / 4 && Math.abs(across) < 1e-6 && canMove(cx, cy, dir)) {
+    player.x = cx; player.y = cy;
+    player.dir = dir;
+  }
+}
+
 function updatePlayer() {
   if (!player.alive) return;
+  applyTouchTurn();
   // Move up to each tile center before turning. Snapping after every small
   // step can round the player back to the same center forever.
   const epsilon = 1e-6;
@@ -113,6 +138,7 @@ function checkCollisions() {
       } else {
         // die
         player.alive = false;
+        resetPointerInput();
         playerDeath = PlayerDeath.create(player, { ticksPerSecond: SIMULATION_HZ });
         lives--;
         playDeath();

@@ -207,6 +207,40 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   assert.equal(await client.evaluate('JSON.stringify({ gameState, player, ghosts, maze, score, lives, level })'), beforeFullscreen);
   t.diagnostic('Native fullscreen and external exit preserve the paused game.');
 
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+  const touchOrigin = await client.evaluate(`(() => {
+    resetLevel(false); ghosts = []; player.speed = 0;
+    gameState = 'playing'; showOverlay(null);
+    const bounds = canvas.getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2, right: bounds.right };
+  })()`);
+  const touch = (x, y, id = 1) => ({ x, y, id });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
+  assert.equal(await client.evaluate('canvas.hasPointerCapture(pointerStart.id)'), true);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(touchOrigin.x, touchOrigin.y - 40)] });
+  assert.equal(await client.evaluate('player.nextDir'), 3);
+  const heldTouch = touch(touchOrigin.x + 13, touchOrigin.y - 26);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [heldTouch] });
+  assert.equal(await client.evaluate('player.nextDir'), 3, 'diagonal drift must not overwrite the native touch swipe');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart',
+    touchPoints: [heldTouch, touch(touchOrigin.x + 60, touchOrigin.y + 40, 2)] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove',
+    touchPoints: [heldTouch, touch(touchOrigin.x + 20, touchOrigin.y + 40, 2)] });
+  assert.equal(await client.evaluate('player.nextDir'), 3, 'another finger must not steer');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  assert.equal(await client.evaluate('pointerStart === null'), true);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(touchOrigin.right + 20, touchOrigin.y)] });
+  assert.equal(await client.evaluate('player.nextDir'), 0, 'capture must keep a swipe usable outside the canvas');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  assert.equal(await client.evaluate('pointerStart === null'), true);
+  assert.deepEqual(await client.evaluate('[scrollX, scrollY]'), [0, 0], 'touch steering must not scroll the page');
+  await client.evaluate('gameState = "paused"; resetLevel(false); showOverlay("PAUSED");');
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
+  t.diagnostic('Native mobile swipes, diagonal drift, multitouch, cancellation and outside-canvas capture verified.');
+
   const ghostSearch = await client.evaluate(`(() => {
     resetLevel(false);
     const visited = ghosts.map(() => new Set());
