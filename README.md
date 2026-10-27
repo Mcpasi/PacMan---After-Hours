@@ -71,6 +71,8 @@ All four ghosts have also received a new design and new colors from me.
 
 **Game speed:** The game speed is now 20% lower at the start.
 
+**added:** Upon contact with a ghost, Pac-Man breaks apart into nine flying fragments, accompanied by a splintering sound.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**
