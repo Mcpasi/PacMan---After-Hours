@@ -69,6 +69,8 @@ All four ghosts have also received a new design and new colors from me.
   undistorted; graphics and game logic 
   remain unchanged.
 
+**Game speed:** The game speed is now 20% lower at the start.
+
 **Offline-capable:** Devices that are not connected to the internet no longer fall back to Canvas, provided that the device is WebGL-capable.
 
 **Test coverage**
