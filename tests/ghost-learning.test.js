@@ -139,6 +139,53 @@ test('both tunnel seams are learned as legal transitions without vertical wrappi
   }
 });
 
+test('tunnel forecasts preserve habits and committed movement at equivalent wrapped positions', () => {
+  const maze = Array.from({ length: 7 }, () => Array(9).fill(0));
+  maze[3].fill(1);
+  maze[4][8] = 1; maze[5][8] = 1;
+  const navigation = GhostNavigation.create(maze, tile), learning = GhostLearning.create();
+  for (const from of [7, 0]) walk(learning, navigation, [[from, 3], [8, 3], [8, 4], [8, 5]], { repeats: 3 });
+  learning.resetObservation();
+  for (const dir of [0, 2]) {
+    const tunnel = { ...player(8, 3, dir), x: -2 };
+    const wrapped = { ...tunnel, x: tunnel.x + navigation.width };
+    const expected = learning.predict(wrapped, navigation);
+    if (dir === 2) assert.deepEqual(expected[0], { col: 8, row: 4 }, 'the learned turn is still ahead');
+    else assert.deepEqual(expected, [], 'a turn behind the player must not override committed movement');
+    assert.deepEqual(learning.predict(tunnel, navigation), expected, `heading ${dir}`);
+  }
+});
+
+test('real movement through the left tunnel retains a learned reversal before the tile center', () => {
+  const game = boot();
+  game.click();
+  game.run(`
+    ghosts = [];
+    for (let pass = 0; pass < 3; pass++) {
+      ghostLearning.resetObservation();
+      Object.assign(player, { x: 1.5 * TILE, y: 11.5 * TILE, dir: 2, nextDir: 2, speed: 2 });
+      updateGhosts();
+      for (let tick = 0; tick < 16; tick++) { updatePlayer(); updateGhosts(); }
+      if (player.x !== -TILE / 2) throw new Error('Training did not reach the tunnel center');
+      player.nextDir = 0;
+      for (let tick = 0; tick < 32; tick++) { updatePlayer(); updateGhosts(); }
+      if (player.x !== 3.5 * TILE) throw new Error('Training reversal was blocked');
+    }
+    ghostLearning.resetObservation();
+    Object.assign(player, { x: TILE / 2, y: 11.5 * TILE, dir: 2, nextDir: 2 });
+    updateGhosts();
+    for (let tick = 0; tick < 5; tick++) { updatePlayer(); updateGhosts(); }
+    globalThis.tunnelNavigation = GhostNavigation.create(maze, TILE);
+  `);
+  assert.equal(game.run('player.x'), -2, 'the real movement code leaves the player outside the grid at the seam');
+  assert.equal(game.run('tunnelNavigation.cellAt(player).col'), 27);
+  const wrapped = JSON.parse(game.run(`JSON.stringify(ghostLearning.predict(
+    { ...player, x: player.x + tunnelNavigation.width }, tunnelNavigation))`));
+  assert.deepEqual(wrapped[0], { col: 0, row: 11 }, 'the reversal was learned from actual player movement');
+  const actual = JSON.parse(game.run('JSON.stringify(ghostLearning.predict(player, tunnelNavigation))'));
+  assert.deepEqual(actual, wrapped, 'a tunnel coordinate must not suppress the learned reversal');
+});
+
 test('learning changes real interception targets and turns while preserving coordinated roles', () => {
   const navigation = GhostNavigation.create(arena(), tile), learning = GhostLearning.create(), pacman = player(8, 8);
   const ghosts = GhostProfiles.all.map(profile => actor(profile.id, 3, 3));

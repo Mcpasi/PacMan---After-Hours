@@ -61,8 +61,10 @@ const GhostLearning = (() => {
         let next = choice;
         if (step === 0) {
           const center = navigation.point(cell), [dx, dy] = dirs[player.dir];
+          // Tunnel coordinates must match the wrapped cell before comparing centers.
+          const x = ((player.x % navigation.width) + navigation.width) % navigation.width;
           // Once past a center, respect the actual turn instead of an old habit.
-          const committed = incoming !== player.dir || (player.x - center.x) * dx + (player.y - center.y) * dy > 1e-6;
+          const committed = incoming !== player.dir || (x - center.x) * dx + (player.y - center.y) * dy > 1e-6;
           if (committed) next = options.find(option => option.dir === player.dir);
         }
         if (!next) {
