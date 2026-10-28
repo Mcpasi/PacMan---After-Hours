@@ -12,3 +12,10 @@
 *Add:* The AI learns recurring player paths. Pinky and Inky use these to intercept; new habits displace old ones.
 
 - Knowledge is retained upon losing a life or changing levels; starting a new game resets it.
+
+- **v.0.1.3**
+
+ **Swipe controls improved:**
+
+- Rapid turns and reversal movements are detected more reliably.               
+- Long-press menus and text selection no longer interfere with the play area.
