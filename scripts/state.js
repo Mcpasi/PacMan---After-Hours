@@ -8,6 +8,7 @@ let level = 1;
 let ghostController, ghostLearning;
 let bonusLife;
 let level256Glitch;
+let retroWorld;
 let playerDeath = null;
 let dotsLeft = 0, powerMode = false, powerTimer = 0, ghostEatCombo = 0;
 let gameState = 'title'; // title, playing, paused, levelComplete, gameOver

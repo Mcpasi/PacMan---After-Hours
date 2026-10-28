@@ -69,9 +69,11 @@ function boot(options = {}) {
     }
     get innerHTML() { return this.html || ''; }
   }
-  for (const id of ['gameContainer', 'fullscreenBtn', 'gameCanvas', 'gameViewport', 'score', 'highScore', 'lives', 'overlay', 'startBtn']) {
+  for (const id of ['gameContainer', 'fullscreenBtn', 'gameCanvas', 'gameViewport', 'worldClock', 'score', 'highScore', 'lives', 'overlay', 'startBtn']) {
     elements.set(id, new Element());
   }
+  elements.get('worldClock').dataset.presentTime = '03:17 AM';
+  elements.get('worldClock').textContent = '03:17 AM';
   elements.get('gameViewport').appendChild(elements.get('gameCanvas'));
   class AudioContext {
     constructor() {

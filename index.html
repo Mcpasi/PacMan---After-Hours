@@ -27,6 +27,7 @@ https://github.com/Mcpasi
 <script src="scripts/state.js" defer></script>
 <script src="scripts/bonus-life.js" defer></script>
 <script src="scripts/level256-glitch.js" defer></script>
+<script src="scripts/retro-world.js" defer></script>
 <script src="scripts/player-death.js" defer></script>
 <script src="scripts/game.js" defer></script>
 <script src="scripts/input.js" defer></script>
@@ -41,6 +42,7 @@ https://github.com/Mcpasi
 <script src="scripts/rendering/actors.js" defer></script>
 <script src="scripts/rendering/bonus-life.js" defer></script>
 <script src="scripts/rendering/level256-glitch.js" defer></script>
+<script src="scripts/rendering/retro-world.js" defer></script>
 <script src="scripts/rendering.js" defer></script>
 <script src="scripts/main.js" defer></script>
 </head>
@@ -49,7 +51,7 @@ https://github.com/Mcpasi
   <header class="district-header">
     <div><span class="eyebrow">PACMAN / NIGHT 01</span><h1>AFTER HOURS<span>.</span></h1></div>
     <div class="district-tools">
-      <span class="district-time">OLD TOWN<br><b>03:17 AM</b></span>
+      <span class="district-time">OLD TOWN<br><b id="worldClock" data-present-time="03:17 AM">03:17 AM</b></span>
       <button id="fullscreenBtn" type="button" aria-label="Enter fullscreen" aria-pressed="false" title="Enter fullscreen">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></svg>
       </button>

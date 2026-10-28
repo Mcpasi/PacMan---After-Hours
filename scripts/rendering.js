@@ -1,5 +1,5 @@
 const GameRenderer = (() => {
-  let fallback, environment, layout, surface, glitchArtwork;
+  let fallback, environment, layout, surface, glitchArtwork, retroArtwork, retroSurface;
   let actors = { ...ClassicActors };
   let time = 0, previousTime = null, generation = 0;
   let motionPreference;
@@ -22,6 +22,7 @@ const GameRenderer = (() => {
 
   function init(canvas) {
     surface = canvas;
+    retroSurface = document.createElement('canvas');
     motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     fallback = CanvasCity.create({ createCanvas: () => document.createElement('canvas') });
     setEnvironment(fallback);
@@ -41,6 +42,9 @@ const GameRenderer = (() => {
   function setMaze(maze) {
     layout = CityLayout.create(maze, TILE);
     glitchArtwork = Level256GlitchArtwork.create(layout);
+    retroArtwork = RetroWorldArtwork.create(maze, TILE, { createCanvas: () => document.createElement('canvas') });
+    retroSurface.width = layout.width;
+    retroSurface.height = layout.height;
     fallback.setLayout(layout);
     if (environment !== fallback) {
       try { environment.setLayout(layout); } catch { useFallback(); }
@@ -91,6 +95,28 @@ const GameRenderer = (() => {
     ctx.restore();
   }
 
+  function drawActors(ctx, state, options, skin) {
+    skin.player(ctx, state.player, options);
+    drawTunnelCopy(ctx, tunnelOffset(state.player, state.maze), () => skin.player(ctx, state.player, options));
+    skin.ghosts(ctx, state.ghosts, options);
+    for (const offset of [layout.width, -layout.width]) {
+      const wrapped = state.ghosts.filter(ghost => tunnelOffset(ghost, state.maze) === offset);
+      if (wrapped.length) drawTunnelCopy(ctx, offset, () => skin.ghosts(ctx, wrapped, options));
+    }
+  }
+
+  function drawRetroWorld(ctx, state, options) {
+    const mix = state.retroWorld?.mix || 0;
+    if (mix <= 0) return;
+    // Blend a complete opaque scene, so sprites, rain and GPU scenery fade together.
+    const retroContext = retroSurface.getContext('2d');
+    retroArtwork.drawMaze(retroContext, state.maze);
+    BonusLifeArtwork.drawCoin(retroContext, state.bonusLife?.coin, options);
+    drawActors(retroContext, state, options, RetroWorldArtwork);
+    ctx.save(); ctx.globalAlpha = Math.min(1, mix);
+    ctx.drawImage(retroSurface, 0, 0); ctx.restore();
+  }
+
   function render(timestamp, state) {
     const delta = previousTime === null ? 0 : Math.max(0, Math.min(100, timestamp - previousTime));
     previousTime = timestamp;
@@ -107,14 +133,9 @@ const GameRenderer = (() => {
     const options = { tile: TILE, colors: GHOST_COLORS, dirs: DIRS,
       powerTimer: state.powerTimer, animFrame: reducedMotion ? 0 : state.animFrame, time, reducedMotion };
     BonusLifeArtwork.drawCoin(ctx, state.bonusLife?.coin, options);
-    actors.player(ctx, state.player, options);
-    drawTunnelCopy(ctx, tunnelOffset(state.player, state.maze), () => actors.player(ctx, state.player, options));
-    actors.ghosts(ctx, state.ghosts, options);
-    for (const offset of [layout.width, -layout.width]) {
-      const wrapped = state.ghosts.filter(ghost => tunnelOffset(ghost, state.maze) === offset);
-      if (wrapped.length) drawTunnelCopy(ctx, offset, () => actors.ghosts(ctx, wrapped, options));
-    }
+    drawActors(ctx, state, options, actors);
     fallback.drawAtmosphere(ctx, frame);
+    drawRetroWorld(ctx, state, options);
     PlayerDeathArtwork.draw(ctx, state.playerDeath, options);
     BonusLifeArtwork.drawEffect(ctx, state.bonusLife?.effect, options);
   }

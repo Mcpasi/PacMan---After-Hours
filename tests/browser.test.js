@@ -549,6 +549,67 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   await client.evaluate(`level256Glitch.state.effect = null;`);
   t.diagnostic('Level-256-inspired fragments, right-edge bounds, cleanup, Canvas isolation, live lamp dimming and reduced-motion changes verified.');
 
+  await t.test('1980 time travel blends the whole scene, keeps live pellets and restores the clock and city', async () => {
+    const visit = await client.evaluate(`(() => {
+      startGame(); gameState = 'paused'; showOverlay('PAUSED');
+      const context = canvas.getContext('2d'), timestamp = performance.now();
+      const before = JSON.stringify({ maze, player, ghosts, score, lives, powerTimer, bonus: bonusLife.state });
+      const state = { maze, player, ghosts, animFrame, powerTimer, gameState: 'paused',
+        bonusLife: bonusLife.state, retroWorld: retroWorld.state };
+      const years = [], phases = [], mixes = [];
+      function render() {
+        updateWorldClock();
+        GameRenderer.render(timestamp, state);
+        years.push(document.getElementById('worldClock').textContent);
+        phases.push(retroWorld.state.phase); mixes.push(retroWorld.state.mix);
+        return canvas.toDataURL();
+      }
+      function advance(ticks) { for (let tick = 0; tick < ticks; tick++) retroWorld.update(); }
+      const present = render();
+      level256Glitch.state.ticksUntilGlitch = 1; level256Glitch.update();
+      if (retroWorld.state.phase !== 'delay') throw new Error('Glitch did not trigger time travel');
+      advance(90); render();
+      advance(240); const halfway = render();
+      advance(240); const past = render();
+      const floor = [...context.getImageData(216, 424, 1, 1).data];
+      const playerBody = [...context.getImageData(player.x - 4, player.y, 1, 1).data];
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let blue = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index + 2] > 180 && pixels[index] < 70 && pixels[index + 1] < 70) blue++;
+      }
+      const preview = ${process.env.PACMAN_RETRO_SCREENSHOT ? 'past' : 'null'};
+      // Pellets are not baked into the cached 1980 background.
+      const cell = maze[1][1]; maze[1][1] = 1; render();
+      const consumed = [...context.getImageData(24, 24, 1, 1).data];
+      maze[1][1] = cell;
+      // Remove the extra probe from the timeline assertions.
+      years.pop(); phases.pop(); mixes.pop();
+      advance(1800); render();
+      advance(180); const returning = render();
+      advance(180); const restored = render();
+      if (JSON.stringify({ maze, player, ghosts, score, lives, powerTimer, bonus: bonusLife.state }) !== before) {
+        throw new Error('Time travel changed gameplay');
+      }
+      return { years, phases, mixes, floor, playerBody, blue, consumed, preview,
+        distinct: new Set([present, halfway, past, returning]).size,
+        restored: present === restored, sameHalfway: halfway === returning };
+    })()`);
+    if (process.env.PACMAN_RETRO_SCREENSHOT) {
+      await fs.writeFile(process.env.PACMAN_RETRO_SCREENSHOT, Buffer.from(visit.preview.split(',')[1], 'base64'));
+    }
+    assert.deepEqual(visit.phases, ['idle', 'fadeIn', 'fadeIn', 'hold', 'fadeOut', 'fadeOut', 'idle']);
+    assert.deepEqual(visit.mixes, [0, 0, 0.5, 1, 1, 0.5, 0]);
+    assert.deepEqual(visit.years, ['03:17 AM', '03:17 AM', '1980', '1980', '1980', '1980', '03:17 AM']);
+    assert.deepEqual(visit.floor, [0, 0, 0, 255], 'the opaque black world must completely cover Canvas or GPU scenery');
+    assert.deepEqual(visit.playerBody, [255, 255, 0, 255], 'the brass player becomes original arcade yellow');
+    assert.ok(visit.blue > 1000, `the blue double maze contours must be visible (${visit.blue} blue pixels)`);
+    assert.deepEqual(visit.consumed, [0, 0, 0, 255], 'consumed pellets must disappear in the 1980 world');
+    assert.equal(visit.distinct, 3);
+    assert.equal(visit.sameHalfway, true, 'both transitions use the same complete-scene blend');
+    assert.equal(visit.restored, true, 'the present-day scene returns without stale retro pixels');
+  });
+
   const deathArtwork = await client.evaluate(`(() => {
     const surface = document.createElement('canvas'); surface.width = surface.height = 256;
     const ctx = surface.getContext('2d'), signatures = [], reduced = [];

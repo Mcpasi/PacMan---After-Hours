@@ -30,7 +30,10 @@ function resetLevel(isNewGame = false) {
     score = 0;
     lives = 3;
   }
-  if (isNewGame || !level256Glitch) level256Glitch = Level256Glitch.create({ ticksPerSecond: SIMULATION_HZ });
+  if (isNewGame || !retroWorld) retroWorld = RetroWorld.create({ ticksPerSecond: SIMULATION_HZ });
+  if (isNewGame || !level256Glitch) level256Glitch = Level256Glitch.create({
+    ticksPerSecond: SIMULATION_HZ, onStart: () => retroWorld.trigger()
+  });
   if (isNewGame || !ghostLearning) ghostLearning = GhostLearning.create();
   loadMaze();
   GameRenderer.setMaze(maze);

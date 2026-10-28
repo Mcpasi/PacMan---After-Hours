@@ -6,9 +6,10 @@ const Level256Glitch = (() => {
     { name: 'symbols', seconds: 0.8 }
   ];
 
-  function create({ ticksPerSecond = 60, random = Math.random } = {}) {
-    if (!Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0 || typeof random !== 'function') {
-      throw new TypeError('The city glitch needs a positive tick rate and a random source.');
+  function create({ ticksPerSecond = 60, random = Math.random, onStart = () => {} } = {}) {
+    if (!Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0 || typeof random !== 'function' ||
+      typeof onStart !== 'function') {
+      throw new TypeError('The city glitch needs a positive tick rate, a random source and an onStart callback.');
     }
     const ticks = seconds => Math.max(1, Math.round(seconds * ticksPerSecond));
     const delay = (minimum, spread) => ticks(minimum + random() * spread);
@@ -25,6 +26,7 @@ const Level256Glitch = (() => {
         if (--state.ticksUntilGlitch <= 0) {
           phase = 0;
           beginPhase(Math.floor(random() * 4294967296) >>> 0);
+          onStart();
         }
         return;
       }

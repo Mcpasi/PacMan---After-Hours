@@ -11,7 +11,14 @@ function showOverlay(title, msg = '', btn = 'CONTINUE') {
   };
 }
 
+function updateWorldClock() {
+  const clock = document.getElementById('worldClock');
+  const text = retroWorld.state.mix > 0 ? '1980' : clock.dataset.presentTime;
+  if (clock.textContent !== text) clock.textContent = text;
+}
+
 function updateUI() {
+  updateWorldClock();
   document.getElementById('score').textContent = 'SCORE: ' + score;
   if (score > highScore) {
     highScore = score;
