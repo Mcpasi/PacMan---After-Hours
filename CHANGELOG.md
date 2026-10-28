@@ -13,7 +13,7 @@
 
 - Knowledge is retained upon losing a life or changing levels; starting a new game resets it.
 
-- **v.0.1.3**
+**v.0.1.3**
 
  **Swipe controls improved:**
 
