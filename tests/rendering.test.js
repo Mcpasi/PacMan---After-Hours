@@ -147,6 +147,34 @@ test('ghost-house barriers are drawn at their actual grid cells', () => {
     method === 'fillRect' && x === 13 * 16 && y === 9 * 16 + 16 * 0.4 && width === 16 && height === 2));
 });
 
+test('tunnel rendering adds translated actor copies without moving gameplay objects', () => {
+  const game = boot({ reducedMotion: true });
+  game.run(`globalThis.actorDraws = [];
+    GameRenderer.setActors({
+      player(ctx, actor) { actorDraws.push(['player', actor.x]); },
+      ghosts(ctx, roster) { actorDraws.push(['ghosts', roster.map(actor => actor.x)]); }
+    });
+    Object.assign(player, { x: -4, y: 11.5 * TILE });
+    ghosts = [{ ...ghosts[0], x: COLS * TILE - 12, y: 11.5 * TILE, mode: 'chase' }];`);
+  const before = game.run('JSON.stringify({ player, ghosts, maze })');
+  game.drawing.length = 0;
+  game.advance();
+  assert.deepEqual(JSON.parse(game.run('JSON.stringify(actorDraws)')), [
+    ['player', -4], ['player', -4], ['ghosts', [436]], ['ghosts', [436]]
+  ]);
+  for (const offset of [448, -448]) {
+    assert.ok(game.drawing.some(([method, x, y]) => method === 'translate' && x === offset && y === 0));
+  }
+  assert.equal(game.run('JSON.stringify({ player, ghosts, maze })'), before);
+
+  // Closed edges and actors in the middle must not acquire tunnel copies.
+  for (const position of ['{ x: 8, y: 1.5 * TILE }', '{ x: 200, y: 11.5 * TILE }']) {
+    game.run(`Object.assign(player, ${position}); ghosts = []; actorDraws.length = 0;`);
+    game.advance();
+    assert.equal(game.run("actorDraws.filter(([kind]) => kind === 'player').length"), 1);
+  }
+});
+
 test('ambient time freezes on pause and respects reduced-motion preferences', () => {
   for (const reducedMotion of [false, true]) {
     const game = boot({ reducedMotion });

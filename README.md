@@ -2,6 +2,8 @@
 
 **Play it live: https://mcpasi.github.io/PacMan---After-Hours/**
 
+[CHANGELOG](CHANGELOG.md)
+
 **A modularly designed Pac-Man game, set in a dark atmosphere**
 
 **Play Pac-Man - After Hours now:** In a dark, alternate world, Pac-Man tries to escape the ghosts; he can only temporarily daze them by using his power-ups. Can you reach the power-ups in time, before the ghosts catch you?

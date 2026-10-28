@@ -76,6 +76,21 @@ const GameRenderer = (() => {
     }
   }
 
+  function tunnelOffset(actor, maze) {
+    const row = maze[Math.floor(actor.y / TILE)];
+    if (!row || row[0] === 0 || row[row.length - 1] === 0) return 0;
+    if (actor.x < TILE) return layout.width;
+    if (actor.x > layout.width - TILE) return -layout.width;
+    return 0;
+  }
+
+  function drawTunnelCopy(ctx, offset, draw) {
+    if (!offset) return;
+    ctx.save(); ctx.translate(offset, 0);
+    draw();
+    ctx.restore();
+  }
+
   function render(timestamp, state) {
     const delta = previousTime === null ? 0 : Math.max(0, Math.min(100, timestamp - previousTime));
     previousTime = timestamp;
@@ -93,7 +108,12 @@ const GameRenderer = (() => {
       powerTimer: state.powerTimer, animFrame: reducedMotion ? 0 : state.animFrame, time, reducedMotion };
     BonusLifeArtwork.drawCoin(ctx, state.bonusLife?.coin, options);
     actors.player(ctx, state.player, options);
+    drawTunnelCopy(ctx, tunnelOffset(state.player, state.maze), () => actors.player(ctx, state.player, options));
     actors.ghosts(ctx, state.ghosts, options);
+    for (const offset of [layout.width, -layout.width]) {
+      const wrapped = state.ghosts.filter(ghost => tunnelOffset(ghost, state.maze) === offset);
+      if (wrapped.length) drawTunnelCopy(ctx, offset, () => actors.ghosts(ctx, wrapped, options));
+    }
     fallback.drawAtmosphere(ctx, frame);
     PlayerDeathArtwork.draw(ctx, state.playerDeath, options);
     BonusLifeArtwork.drawEffect(ctx, state.bonusLife?.effect, options);

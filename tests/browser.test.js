@@ -163,6 +163,63 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     return layout;
   }
 
+  await t.test('tunnel actors remain visible on both sides of the horizontal seam', async () => {
+    const samples = await client.evaluate(`(() => {
+      const ctx = canvas.getContext('2d'), timestamp = performance.now();
+      const state = { maze, player: { ...player, alive: false }, ghosts: [],
+        powerTimer: 0, animFrame: 0, gameState: 'paused' };
+      const results = [];
+      for (const x of [-4, 4]) {
+        for (const kind of ['player', 'ghost', 'eyes']) {
+          GameRenderer.render(timestamp, state);
+          const before = ctx.getImageData(0, 176, canvas.width, 16).data;
+          const actor = { ...player, x, y: 184, alive: true, dir: 2, mouth: 0.3 };
+          const visible = kind === 'player' ? { ...state, player: actor } : { ...state,
+            ghosts: [{ ...ghosts[0], x, y: 184, dir: 2, mode: kind === 'eyes' ? 'eyes' : 'chase', scared: false }] };
+          GameRenderer.render(timestamp, visible);
+          const after = ctx.getImageData(0, 176, canvas.width, 16).data;
+          let left = 0, right = 0;
+          for (let y = 0; y < 16; y++) for (let col = 0; col < canvas.width; col++) {
+            const i = (y * canvas.width + col) * 4;
+            if (!after.slice(i, i + 4).some((value, channel) => value !== before[i + channel])) continue;
+            if (col < 16) left++;
+            if (col >= canvas.width - 16) right++;
+          }
+          results.push({ kind, x, left, right });
+        }
+      }
+      return results;
+    })()`);
+    t.diagnostic(JSON.stringify(samples));
+    for (const sample of samples) {
+      assert.ok(sample.left > 0 && sample.right > 0, `actor clipped at tunnel seam: ${JSON.stringify(sample)}`);
+    }
+  });
+
+  await t.test('the complete title overlay fits a small square viewport', async () => {
+    try {
+      for (const [width, height] of [[360, 360], [320, 320], [400, 400]]) {
+        await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+        const bounds = await client.evaluate(`(() => {
+          const overlay = document.getElementById('overlay').getBoundingClientRect();
+          return [...document.getElementById('overlay').children].map(element => {
+            const rect = element.getBoundingClientRect();
+            return { text: element.textContent.trim(), left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+              overlayTop: overlay.top, overlayBottom: overlay.bottom,
+              fits: rect.left >= overlay.left && rect.right <= overlay.right &&
+                rect.top >= overlay.top && rect.bottom <= overlay.bottom && element.scrollWidth <= element.clientWidth + 1,
+              touchTarget: element.tagName !== 'BUTTON' || rect.height >= 44 };
+          });
+        })()`);
+        t.diagnostic(JSON.stringify({ width, height, bounds }));
+        assert.ok(bounds.every(element => element.fits), 'title text and start button must not be clipped by the viewport');
+        assert.ok(bounds.every(element => element.touchTarget), 'the compact start button must retain a 44px touch target');
+      }
+    } finally {
+      await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
+    }
+  });
+
   // Exercise the no-API path used by iPhones and restricted embeds, including rotation.
   await client.evaluate(`for (const key of ['requestFullscreen', 'webkitRequestFullscreen']) {
     Object.defineProperty(document.getElementById('gameContainer'), key, { value: undefined, configurable: true });

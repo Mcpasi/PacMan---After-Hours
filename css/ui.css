@@ -41,10 +41,13 @@ button:focus-visible { outline: 2px solid #f6e4bc; outline-offset: 5px; }
   .district-header h1 { font-size: clamp(18px, 3vw, 22px); }
   #ui { grid-area: 2 / 1; flex-direction: column; justify-content: flex-start; gap: 8px; margin: 0; }
   .status-bar { grid-area: 3 / 1; flex-wrap: wrap; }
+}
+@media (max-height: 500px) {
   #overlay { padding: 8px; }
-  #overlay h1, #overlay h2 { font-size: clamp(24px, 8vh, 40px); margin: 10px 0; }
-  #overlay p { margin: 3px 0; line-height: 1.4; }
-  #overlay .controls { margin-top: 8px; }
-  #overlay button { margin-top: 10px; }
+  #overlay .eyebrow { letter-spacing: 1px; }
+  #overlay h1, #overlay h2 { font-size: clamp(24px, min(8vw, 8vh), 40px); margin: 8px 0; }
+  #overlay p { margin: 2px 0; line-height: 1.4; }
+  #overlay .controls { margin-top: 6px; }
+  #overlay button { min-height: 44px; margin-top: 10px; padding: 10px 12px; font-size: 10px; letter-spacing: 0.5px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
