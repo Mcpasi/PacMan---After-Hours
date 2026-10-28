@@ -12,6 +12,10 @@
 
 We are currently investigating an error that we cannot explain; it seems the bug from the original game has returned.
 
+**Back to the beginnings:**
+
+For reasons as yet unknown, Old Town’s reality is merging with the year 1980, ready for a brief trip through time?
+
 **The ghosts are now learning from the player's behavior:**
 
 After all the years spent wandering through the dark and deserted labyrinth, the ghosts have seemingly learned how Pac-Man moves, so be on your guard.
