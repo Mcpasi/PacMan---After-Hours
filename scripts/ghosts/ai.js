@@ -24,12 +24,19 @@ const GhostAI = (() => {
       y: player.y + (dy * ahead + dx * across) * tile };
   }
 
-  function plan(ghosts, player, navigation) {
+  function plan(ghosts, player, navigation, learning, powerMode = false) {
     const targets = new Map(), reserved = [];
+    const predicted = learning ? learning.predict(player, navigation, powerMode) : [];
     const active = ghosts.filter(ghost => ghost.mode === 'chase' && !ghost.scared)
       .sort((a, b) => profiles.get(a).index - profiles.get(b).index);
     for (const ghost of active) {
-      const target = navigation.nearest(desiredTarget(ghost, player, ghosts, navigation.tile),
+      const id = profiles.get(ghost).id;
+      // Blinky keeps up direct pressure; Clyde still covers the rear. The other
+      // two intercept different stretches of a reliably learned escape route.
+      const intercept = predicted.length && (id === 'pinky' || id === 'inky')
+        ? predicted[Math.min(predicted.length - 1, id === 'pinky' ? 3 : 5)] : null;
+      const desired = intercept ? navigation.point(intercept) : desiredTarget(ghost, player, ghosts, navigation.tile);
+      const target = navigation.nearest(desired,
         navigation.cellAt(ghost), { reserved });
       if (target) { targets.set(ghost, target); reserved.push(target); }
     }
