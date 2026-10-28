@@ -73,9 +73,10 @@ function updatePlayer() {
   player.mouth += player.mouthDir * 0.3;
   if (player.mouth > 0.4 || player.mouth < 0) player.mouthDir *= -1;
   // eat
-  const c = Math.floor(player.x / TILE);
+  // Tunnel movement can leave x just outside the grid until the next center.
+  const c = ((Math.floor(player.x / TILE) % COLS) + COLS) % COLS;
   const r = Math.floor(player.y / TILE);
-  if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+  if (r >= 0 && r < ROWS) {
     if (maze[r][c] === 2) {
       maze[r][c] = 1;
       score += 10;
@@ -121,9 +122,11 @@ function updateGhosts() {
 
 function checkCollisions() {
   if (!player.alive) return;
+  const width = COLS * TILE;
   ghosts.forEach(g => {
     if (!player.alive || g.mode === 'house' || g.mode === 'eyes') return;
-    const dist = Math.hypot(player.x - g.x, player.y - g.y);
+    const dx = Math.abs(player.x - g.x) % width;
+    const dist = Math.hypot(Math.min(dx, width - dx), player.y - g.y);
     if (dist < TILE * 0.7) {
       if (g.scared) {
         // eat ghost
