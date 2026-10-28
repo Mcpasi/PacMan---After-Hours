@@ -11,6 +11,7 @@ function initInput() {
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('lostpointercapture', onPointerCancel);
+  canvas.addEventListener('contextmenu', onContextMenu);
   // Also steer and finish outside the canvas if pointer capture failed.
   window.addEventListener('pointermove', e => {
     if (e.target !== canvas) onPointerMove(e); // Canvas moves already ran before bubbling.
@@ -72,6 +73,17 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   if (!pointerStart || e.pointerId !== pointerStart.id) return;
   if (gameState !== 'playing' || !player.alive) { resetPointerInput(); return; }
+  // Browsers may batch a corner or a reversal into one move. Keep the actual
+  // path and its extremes instead of steering only from the final position.
+  if (typeof e.getCoalescedEvents === 'function') {
+    for (const sample of e.getCoalescedEvents()) {
+      if (sample.pointerId === pointerStart.id) updateSwipe(sample);
+    }
+  }
+  updateSwipe(e); // Also works without history, or if it omits the newest point.
+}
+
+function updateSwipe(e) {
   let dx = e.clientX - pointerStart.x, dy = e.clientY - pointerStart.y;
   // Measure a reversal from the finger's extreme, including sub-threshold motion,
   // rather than making it cross back over the last accepted command's position.
@@ -96,6 +108,13 @@ function onPointerMove(e) {
   pointerStart.peak = ax > ay ? e.clientX : e.clientY;
   pointerStart.x = e.clientX;
   pointerStart.y = e.clientY;
+}
+
+function onContextMenu(e) {
+  // A held finger is a controller, not a request for a browser menu. Keep
+  // desktop right-clicks and menus outside active gameplay unchanged.
+  if (gameState === 'playing' && player.alive &&
+      (pointerStart?.touch || e.pointerType === 'touch' || e.pointerType === 'pen')) e.preventDefault();
 }
 
 function onPointerUp(e) {

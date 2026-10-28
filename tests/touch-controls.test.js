@@ -16,6 +16,20 @@ function swipe(game, dir, options = {}) {
   game.pointer('pointerup', 100 + dx * 30, 100 + dy * 30, 1, options);
 }
 
+function batch(game, points, options = {}) {
+  const [x, y] = points.at(-1);
+  game.pointer('pointermove', x, y, 1, {
+    getCoalescedEvents: () => points.map(([clientX, clientY]) => ({ pointerId: 1, clientX, clientY })),
+    ...options
+  });
+}
+
+function contextMenu(game, options = {}) {
+  const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...options };
+  game.elements.get('gameCanvas').emit('contextmenu', event);
+  return event.defaultPrevented;
+}
+
 function crossing(game, dir, offset, speed = 1.3) {
   const [dx, dy] = directions[dir];
   game.run(`
@@ -82,6 +96,78 @@ test('touch reversals measure the threshold from the latest finger extreme in ev
     move(31);
     assert.equal(game.run('player.nextDir'), (dir + 2) % 4, 'a 20px reversal must not be lost');
   }
+});
+
+test('batched touch motion preserves a short reversal from the actual finger extreme in every direction', () => {
+  for (let dir = 0; dir < 4; dir++) {
+    const game = start();
+    const [dx, dy] = directions[dir];
+    const point = distance => [100 + dx * distance, 100 + dy * distance];
+    game.pointer('pointerdown', 100, 100);
+    game.pointer('pointermove', ...point(40));
+    batch(game, [43, 47, 51, 50, 47, 44, 40].map(point));
+    assert.equal(game.run('player.nextDir'), dir, 'batched jitter below 12px must not reverse');
+    game.pointer('pointermove', ...point(39));
+    assert.equal(game.run('player.nextDir'), (dir + 2) % 4, 'the hidden extreme must count toward the reversal');
+  }
+});
+
+test('continuous turns have the same result regardless of browser motion batching', () => {
+  const points = [[140, 100], [151, 100], [139, 100], [139, 140], [139, 151], [139, 139],
+    [99, 139], [88, 139], [100, 139], [100, 99], [100, 88], [100, 100]];
+  const reference = start();
+  reference.pointer('pointerdown', 100, 100);
+  for (const point of points) reference.pointer('pointermove', ...point);
+  const state = 'JSON.stringify({ nextDir: player.nextDir, touchTurn: player.touchTurn, pointerStart })';
+  assert.equal(reference.run('player.nextDir'), 1);
+  for (const size of [1, 2, 3, 4, points.length]) {
+    const game = start();
+    game.pointer('pointerdown', 100, 100);
+    for (let index = 0; index < points.length; index += size) batch(game, points.slice(index, index + size));
+    assert.equal(game.run(state), reference.run(state), `batch size ${size}`);
+  }
+});
+
+test('batched corners preserve touch and pen assistance without applying it to mouse drags', () => {
+  for (const pointerType of ['touch', 'pen', 'mouse']) {
+    const game = start();
+    game.pointer('pointerdown', 100, 100, 1, { pointerType });
+    batch(game, [[140, 100], [140, 130]], { pointerType });
+    assert.equal(game.run('player.nextDir'), 1, pointerType);
+    assert.equal(game.run('player.touchTurn'), pointerType === 'mouse' ? null : 1, pointerType);
+  }
+});
+
+test('the current event is processed after its history, including when history is empty', () => {
+  const game = start();
+  game.pointer('pointerdown', 100, 100);
+  game.pointer('pointermove', 100, 60, 1, {
+    getCoalescedEvents: () => [
+      { pointerId: 1, clientX: 140, clientY: 100 },
+      { pointerId: 1, clientX: 140, clientY: 60 }
+    ]
+  });
+  assert.equal(game.run('player.nextDir'), 2, 'the newest leftward segment must not be dropped');
+  game.pointer('pointermove', 100, 90, 1, { getCoalescedEvents: () => [] });
+  assert.equal(game.run('player.nextDir'), 1, 'an empty history must still steer normally');
+});
+
+test('batched input cannot steer with another finger or revive an interrupted gesture', () => {
+  const game = start();
+  game.pointer('pointerdown', 100, 100);
+  let reads = 0;
+  const options = { getCoalescedEvents() { reads++; return [{ pointerId: 1, clientX: 60, clientY: 100 }]; } };
+  game.pointer('pointermove', 60, 100, 2, options);
+  assert.equal(reads, 0, 'reject a foreign pointer before reading its history');
+  batch(game, [[100, 100]], {
+    getCoalescedEvents: () => [{ pointerId: 2, clientX: 60, clientY: 100 }]
+  });
+  assert.equal(game.run('player.nextDir'), 0);
+  game.key('p');
+  game.key('p');
+  game.pointer('pointermove', 60, 100, 1, options);
+  assert.equal(reads, 0);
+  assert.equal(game.run('player.nextDir'), 0);
 });
 
 test('small diagonal moves and their release stay ambiguous after an accepted swipe', () => {
@@ -179,6 +265,42 @@ test('a failed capture still steers outside the canvas before release and ignore
   game.run('window.emit("pointercancel", { pointerId: 1 });');
   game.run('window.emit("pointermove", { pointerId: 1, clientX: 60, clientY: 140 });');
   assert.equal(game.run('player.nextDir'), 2, 'outside movement must not revive a cancelled swipe');
+});
+
+test('uncaptured window movement also processes the complete finger path', () => {
+  const game = start();
+  game.elements.get('gameCanvas').setPointerCapture = () => { throw new Error('Inactive pointer'); };
+  game.pointer('pointerdown', 100, 100);
+  game.run(`window.emit('pointermove', { pointerId: 1, clientX: 140, clientY: 130,
+    getCoalescedEvents: () => [{ pointerId: 1, clientX: 140, clientY: 100 }] });`);
+  assert.equal(game.run('player.nextDir'), 1);
+});
+
+test('touch and pen long-press menus are suppressed without ending the swipe', () => {
+  for (const pointerType of ['touch', 'pen']) {
+    const game = start();
+    game.pointer('pointerdown', 100, 100, 1, { pointerType });
+    game.pointer('pointermove', 140, 100);
+    assert.equal(contextMenu(game, { pointerType }), true);
+    assert.equal(contextMenu(game), true, 'older browsers may report a generic contextmenu event');
+    assert.equal(game.elements.get('gameCanvas').hasPointerCapture(1), true);
+    game.pointer('pointermove', 128, 100);
+    assert.equal(game.run('player.nextDir'), 2, 'steering remains usable after a long press');
+    game.pointer('pointercancel', 128, 100);
+    assert.equal(contextMenu(game, { pointerType }), true, 'some browsers cancel capture before opening the menu');
+  }
+});
+
+test('context-menu suppression stays limited to live touch gameplay', () => {
+  const game = start();
+  assert.equal(contextMenu(game, { pointerType: 'mouse' }), false);
+  game.pointer('pointerdown', 100, 100, 1, { pointerType: 'mouse' });
+  assert.equal(contextMenu(game), false, 'desktop context menus remain available');
+  game.pointer('pointercancel', 100, 100);
+  for (const setup of ['gameState = "title";', 'gameState = "paused";', 'gameState = "playing"; player.alive = false;']) {
+    game.run(setup);
+    assert.equal(contextMenu(game, { pointerType: 'touch' }), false, setup);
+  }
 });
 
 test('non-primary fingers, right mouse buttons and inactive games do not start swipes', () => {

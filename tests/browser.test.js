@@ -275,6 +275,13 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   const touch = (x, y, id = 1) => ({ x, y, id });
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
   assert.equal(await client.evaluate('canvas.hasPointerCapture(pointerStart.id)'), true);
+  assert.deepEqual(await client.evaluate(`(() => {
+    const style = getComputedStyle(canvas);
+    return { touchAction: style.touchAction, userSelect: style.userSelect,
+      menuAllowed: canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })),
+      captured: canvas.hasPointerCapture(pointerStart.id) };
+  })()`), { touchAction: 'none', userSelect: 'none', menuAllowed: false, captured: true },
+  'a held finger must not open a context menu or select the game surface');
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(touchOrigin.x, touchOrigin.y - 40)] });
   assert.equal(await client.evaluate('player.nextDir'), 3);
   const heldTouch = touch(touchOrigin.x + 13, touchOrigin.y - 26);
@@ -287,6 +294,8 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   assert.equal(await client.evaluate('player.nextDir'), 3, 'another finger must not steer');
   await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   assert.equal(await client.evaluate('pointerStart === null'), true);
+  assert.equal(await client.evaluate("canvas.dispatchEvent(new PointerEvent('contextmenu', { pointerType: 'mouse', cancelable: true }))"), true,
+    'desktop right-clicks remain available when no finger is steering');
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(touchOrigin.right + 20, touchOrigin.y)] });
   assert.equal(await client.evaluate('player.nextDir'), 0, 'capture must keep a swipe usable outside the canvas');
@@ -295,13 +304,34 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
 
   for (const [dir, dx, dy] of [[0, 1, 0], [1, 0, 1], [2, -1, 0], [3, 0, -1]]) {
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
-    for (const distance of [40, 51, 31]) {
+    for (const distance of [40, 43, 47, 51, 50, 47, 44, 40, 39]) {
       await client.send('Input.dispatchTouchEvent', { type: 'touchMove',
         touchPoints: [touch(touchOrigin.x + dx * distance, touchOrigin.y + dy * distance)] });
+      if (distance !== 39) assert.equal(await client.evaluate('player.nextDir'), dir, 'sub-threshold native motion must not reverse');
     }
-    assert.equal(await client.evaluate('player.nextDir'), (dir + 2) % 4, `20px native touch reversal after direction ${dir}`);
+    assert.equal(await client.evaluate('player.nextDir'), (dir + 2) % 4, `12px native touch reversal after direction ${dir}`);
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   }
+
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
+  // Supply deterministic history: CDP's native moves do not guarantee batching.
+  assert.deepEqual(await client.evaluate(`(() => {
+    const { id, x, y } = pointerStart;
+    let reads = 0;
+    const point = (clientX, clientY) => new PointerEvent('pointermove', {
+      pointerId: id, pointerType: 'touch', clientX, clientY, bubbles: true
+    });
+    const event = point(x, y);
+    Object.defineProperty(event, 'getCoalescedEvents', { value() {
+      reads++;
+      return [point(x + 40, y), point(x + 40, y + 40), point(x, y + 40)];
+    } });
+    canvas.dispatchEvent(event);
+    return { reads, nextDir: player.nextDir, touchTurn: player.touchTurn };
+  })()`), { reads: 1, nextDir: 3, touchTurn: 3 },
+  'a batched square must end facing up and its bubbled history must only be processed once');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  assert.equal(await client.evaluate('pointerStart === null'), true);
 
   const outsideTouch = await client.evaluate(`(() => {
     player.nextDir = 0;
@@ -322,9 +352,11 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   }
   assert.deepEqual(await client.evaluate('[scrollX, scrollY]'), [0, 0], 'touch steering must not scroll the page');
   await client.evaluate('gameState = "paused"; resetLevel(false); showOverlay("PAUSED");');
+  assert.equal(await client.evaluate("document.getElementById('ovBtn').dispatchEvent(new PointerEvent('contextmenu', { pointerType: 'touch', bubbles: true, cancelable: true }))"), true,
+    'touch protection must not interfere with overlay controls');
   await client.send('Emulation.setTouchEmulationEnabled', { enabled: false });
   await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
-  t.diagnostic('Native mobile swipes, reversals, diagonal drift, multitouch, cancellation and outside-canvas capture/fallback verified.');
+  t.diagnostic('Native mobile swipes, 12px reversals, batched paths, long-press protection, diagonal drift, multitouch, cancellation and outside-canvas capture/fallback verified.');
 
   const ghostSearch = await client.evaluate(`(() => {
     resetLevel(false);
