@@ -1,11 +1,13 @@
 const GhostController = (() => {
   const profiles = typeof module !== 'undefined' && module.exports ? require('./profiles') : GhostProfiles;
   const navigationModule = typeof module !== 'undefined' && module.exports ? require('./navigation') : GhostNavigation;
+  const learningModule = typeof module !== 'undefined' && module.exports ? require('./learning') : GhostLearning;
   const ai = typeof module !== 'undefined' && module.exports ? require('./ai') : GhostAI;
   const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]], epsilon = 1e-6;
 
-  function create(maze, tile) {
+  function create(maze, tile, { learning = learningModule.create() } = {}) {
     const navigation = navigationModule.create(maze, tile);
+    learning.resetObservation();
     const home = navigation.point(profiles.home), exit = navigation.point(profiles.exit);
     const centered = ghost => Math.abs(ghost.x - (Math.floor(ghost.x / tile) + 0.5) * tile) < epsilon &&
       Math.abs(ghost.y - (Math.floor(ghost.y / tile) + 0.5) * tile) < epsilon;
@@ -19,6 +21,7 @@ const GhostController = (() => {
 
     function update(ghosts, player, powerMode) {
       // One fixed 60 Hz simulation tick; rendering may run at a different rate.
+      learning.observe(player, navigation, powerMode);
       let targets;
       const reservations = ghosts.filter(ghost => ghost.mode === 'chase' && !centered(ghost)).map(ghost => {
         const next = nextCenter(ghost);
@@ -46,7 +49,7 @@ const GhostController = (() => {
             if (ghost.mode === 'eyes') target = profiles.home;
             else if (ghost.scared) target = navigation.nearest(player, cell);
             else {
-              targets ||= ai.plan(ghosts, player, navigation);
+              targets ||= ai.plan(ghosts, player, navigation, learning, powerMode);
               target = targets.get(ghost);
             }
             ghost.target = target ? navigation.point(target) : null;

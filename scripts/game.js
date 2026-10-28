@@ -31,6 +31,7 @@ function resetLevel(isNewGame = false) {
     lives = 3;
   }
   if (isNewGame || !level256Glitch) level256Glitch = Level256Glitch.create({ ticksPerSecond: SIMULATION_HZ });
+  if (isNewGame || !ghostLearning) ghostLearning = GhostLearning.create();
   loadMaze();
   GameRenderer.setMaze(maze);
   dotsLeft = 0;
@@ -50,7 +51,7 @@ function resetActors() {
     dir: 0, nextDir: 0, touchTurn: null, // 0=right,1=down,2=left,3=up
     speed: getLevelSpeed(1.3, 0.1, 2.2), mouth: 0, mouthDir: 1, alive: true
   };
-  ghostController = GhostController.create(maze, TILE);
+  ghostController = GhostController.create(maze, TILE, { learning: ghostLearning });
   ghosts = GhostProfiles.create(TILE);
   ghosts.forEach(ghost => { ghost.speed = getLevelSpeed(ghost.speed, 0.08, 1.9); });
   powerMode = false;
