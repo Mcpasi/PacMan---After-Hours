@@ -14,10 +14,12 @@ We are currently investigating an error that we cannot explain; it seems the bug
 
 **The ghosts are now learning from the player's behavior:**
 
-After all the years spent wandering through the dark and deserted labyrinth, the ghosts have seemingly learned how Pac-Man moves—so be on your guard.
+After all the years spent wandering through the dark and deserted labyrinth, the ghosts have seemingly learned how Pac-Man moves, so be on your guard.
 
 > [!NOTE]
 > **Pac-Man: After Hours is an independent project and is not affiliated with Bandai Namco.**
+
+  After Hours is an early version, intended to take place years after the original game, a "what-if" scenario.
 
 
 ## How to play
