@@ -12,6 +12,10 @@
 
 We are currently investigating an error that we cannot explain; it seems the bug from the original game has returned.
 
+> [!NOTE]
+> **Pac-Man: After Hours is an independent project and is not affiliated with Bandai Namco.**
+
+
 ## How to play
 
 - **Move:** Arrow keys or WASD
