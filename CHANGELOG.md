@@ -19,3 +19,7 @@
 
 - Rapid turns and reversal movements are detected more reliably.               
 - Long-press menus and text selection no longer interfere with the play area.
+
+**v.0.1.5** 
+
+**Add:** After each glitch, there is a slow transition to the 1980 look; it remains for 30 seconds with “1980” on the clock, before fading back.
