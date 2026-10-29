@@ -496,6 +496,78 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   assert.equal(bonus.icons, bonus.lives);
   t.diagnostic('Bonus coin, rotation, reduced motion, collection effect and extra HUD life verified.');
 
+  await t.test('freeze finds render in both worlds, stop ghosts for four seconds and preserve their controller and learning', async () => {
+    const freeze = await client.evaluate(`(() => {
+      resetLevel(false); gameState = 'paused'; showOverlay('PAUSED');
+      const surface = document.createElement('canvas'); surface.width = surface.height = 128;
+      const context = surface.getContext('2d'), signatures = [], frozenSignatures = [];
+      const preview = document.createElement('canvas'); preview.width = 640; preview.height = 256;
+      const previewContext = preview.getContext('2d');
+      previewContext.fillStyle = '#101b22'; previewContext.fillRect(0, 0, preview.width, preview.height);
+      const before = JSON.stringify({ maze, ghosts, player, freeze: freezePowerUps.state });
+      for (const [row, world] of ['city', 'retro'].entries()) {
+        for (const [column, kind] of ['lantern', 'watch'].entries()) {
+          const state = { pickups: [{ kind, x: 64, y: 64 }] };
+          const frames = [];
+          for (const time of [0, 20]) {
+            context.clearRect(0, 0, 128, 128); context.fillStyle = '#123456'; context.lineWidth = 3;
+            FreezePowerUpArtwork.drawPickups(context, state, { tile: 64, time, world, reducedMotion: true });
+            if (context.fillStyle !== '#123456' || context.lineWidth !== 3 || !context.getTransform().isIdentity || context.shadowBlur !== 0) {
+              throw new Error('Freeze pickup leaked Canvas state');
+            }
+            if (!context.getImageData(0, 0, 128, 128).data.some(value => value)) throw new Error('Invisible freeze find');
+            frames.push(surface.toDataURL());
+          }
+          if (frames[0] !== frames[1]) throw new Error('Reduced-motion freeze find still moves');
+          signatures.push(frames[0]);
+          previewContext.drawImage(surface, column * 128, row * 128);
+        }
+        for (const [column, mode] of ['chase', 'frightened', 'eyes'].entries()) {
+          const roster = [{ ...ghosts[0], x: 64, y: 64, mode: mode === 'frightened' ? 'chase' : mode,
+            scared: mode === 'frightened' }];
+          const frames = [];
+          for (const time of [0, 0.2]) {
+            context.clearRect(0, 0, 128, 128);
+            const options = { tile: 64, dirs: DIRS, powerTimer: 60, time, frozen: true, world };
+            (world === 'retro' ? RetroWorldArtwork.ghosts : GhostArtwork.draw)(context, roster, options);
+            FreezePowerUpArtwork.drawFrozenGhosts(context, roster, options);
+            if (!context.getTransform().isIdentity || context.shadowBlur !== 0) throw new Error('Frozen ghost leaked Canvas state');
+            frames.push(surface.toDataURL());
+          }
+          if (frames[0] !== frames[1]) throw new Error('Frozen ghost artwork still animates');
+          frozenSignatures.push(frames[0]);
+          previewContext.drawImage(surface, (column + 2) * 128, row * 128);
+        }
+      }
+      if (JSON.stringify({ maze, ghosts, player, freeze: freezePowerUps.state }) !== before) throw new Error('Freeze artwork changed gameplay');
+      const state = { maze, ghosts, player, powerTimer, animFrame, gameState: 'paused', freezePowerUps: freezePowerUps.state };
+      const timestamp = performance.now();
+      for (const mix of [0, 0.5, 1]) {
+        state.retroWorld = { mix };
+        GameRenderer.render(timestamp, state);
+        const visible = canvas.toDataURL();
+        GameRenderer.render(timestamp, { ...state, freezePowerUps: { ...freezePowerUps.state, pickups: [] } });
+        if (visible === canvas.toDataURL()) throw new Error('Freeze finds disappeared at world mix ' + mix);
+      }
+      const controller = ghostController, learning = ghostLearning;
+      const ghostsBefore = JSON.stringify(ghosts);
+      Object.assign(player, freezePowerUps.state.pickups[0], { speed: 0 }); updatePlayer();
+      if (freezePowerUps.state.remainingTicks !== 240 || freezePowerUps.state.pickups.length !== 1) throw new Error('Freeze pickup failed');
+      for (let tick = 0; tick < 240; tick++) updateGhosts();
+      if (JSON.stringify(ghosts) !== ghostsBefore || freezePowerUps.state.remainingTicks !== 0) throw new Error('Freeze did not last exactly four seconds');
+      updateGhosts();
+      if (JSON.stringify(ghosts) === ghostsBefore) throw new Error('Ghosts failed to thaw');
+      if (controller !== ghostController || learning !== ghostLearning) throw new Error('Freeze replaced the ghost controller or knowledge');
+      return { pickups: new Set(signatures).size, ghosts: new Set(frozenSignatures).size,
+        preview: ${process.env.PACMAN_FREEZE_SCREENSHOT ? 'preview.toDataURL()' : 'null'} };
+    })()`);
+    assert.equal(freeze.pickups, 4, 'both finds must have distinct Old Town and arcade skins');
+    assert.equal(freeze.ghosts, 6, 'chasing, frightened and eye-only states remain distinct under ice in both worlds');
+    if (process.env.PACMAN_FREEZE_SCREENSHOT) {
+      await fs.writeFile(process.env.PACMAN_FREEZE_SCREENSHOT, Buffer.from(freeze.preview.split(',')[1], 'base64'));
+    }
+  });
+
   const corruption = await client.evaluate(`(() => {
     const city = CityLayout.create(maze, TILE), artwork = Level256GlitchArtwork.create(city);
     const surface = document.createElement('canvas'); surface.width = city.width; surface.height = city.height;

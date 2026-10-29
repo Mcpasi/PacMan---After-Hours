@@ -43,12 +43,14 @@ function resetLevel(isNewGame = false) {
       if (maze[r][c] === 2 || maze[r][c] === 3) dotsLeft++;
   resetActors();
   bonusLife = BonusLife.create(maze, TILE, { origin: player, ticksPerSecond: SIMULATION_HZ });
+  freezePowerUps = FreezePowerUps.create(maze, TILE, { origin: player, ticksPerSecond: SIMULATION_HZ });
 }
 
 function resetActors() {
   resetPointerInput();
   resetSimulationClock();
   playerDeath = null;
+  freezePowerUps?.resetEffect();
   player = {
     x: 13.5 * TILE, y: 22.5 * TILE,
     dir: 0, nextDir: 0, touchTurn: null, // 0=right,1=down,2=left,3=up

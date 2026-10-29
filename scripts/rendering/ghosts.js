@@ -98,12 +98,12 @@ const GhostArtwork = (() => {
     }
   }
 
-  function draw(ctx, ghosts, { tile, colors, dirs, powerTimer = 0, animFrame = 0, time = animFrame / 60, reducedMotion = false }) {
+  function draw(ctx, ghosts, { tile, colors, dirs, powerTimer = 0, animFrame = 0, time = animFrame / 60, reducedMotion = false, frozen = false }) {
     for (const ghost of ghosts) {
       if (ghost.mode === 'house' && ghost.houseTimer > 30) continue;
       const profile = profiles.get(ghost);
-      const sway = reducedMotion ? 0 : Math.sin(time * 5 + profile.index * 1.7) * 0.035;
-      const flash = ghost.scared && !reducedMotion && powerTimer < 120 && Math.floor(time * 60 / 8) % 2 === 1;
+      const sway = reducedMotion || frozen ? 0 : Math.sin(time * 5 + profile.index * 1.7) * 0.035;
+      const flash = ghost.scared && !reducedMotion && !frozen && powerTimer < 120 && Math.floor(time * 60 / 8) % 2 === 1;
       ctx.save(); ctx.translate(ghost.x, ghost.y); ctx.scale(tile, tile);
       if (ghost.mode === 'eyes') {
         eyes(ctx, ghost, dirs);

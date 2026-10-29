@@ -19,9 +19,12 @@ const GhostController = (() => {
       return { axis, sign, value };
     }
 
-    function update(ghosts, player, powerMode) {
+    function update(ghosts, player, powerMode, { frozen = false } = {}) {
       // One fixed 60 Hz simulation tick; rendering may run at a different rate.
       learning.observe(player, navigation, powerMode);
+      // Suspend locomotion, releases and routing without replacing actors or
+      // clearing observations: learned routes remain useful after thawing.
+      if (frozen) return;
       let targets;
       const reservations = ghosts.filter(ghost => ghost.mode === 'chase' && !centered(ghost)).map(ghost => {
         const next = nextCenter(ghost);

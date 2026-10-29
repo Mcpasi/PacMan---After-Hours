@@ -34,6 +34,7 @@ function loop(ts) {
   updateWorldClock();
   GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState,
     bonusLife: bonusLife.state, playerDeath: playerDeath?.state,
+    freezePowerUps: freezePowerUps.state,
     retroWorld: retroWorld.state,
     level256Glitch: player.alive && (gameState === 'playing' || gameState === 'paused')
       ? level256Glitch.state.effect : null });

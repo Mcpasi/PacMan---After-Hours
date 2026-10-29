@@ -103,10 +103,10 @@ const RetroWorldArtwork = (() => {
     ctx.closePath(); ctx.fill(); ctx.restore();
   }
 
-  function ghosts(ctx, roster, { tile, dirs, powerTimer = 0, time = 0, reducedMotion = false }) {
+  function ghosts(ctx, roster, { tile, dirs, powerTimer = 0, time = 0, reducedMotion = false, frozen = false }) {
     for (const ghost of roster) {
       if (ghost.mode === 'house' && ghost.houseTimer > 30) continue;
-      const flash = ghost.scared && !reducedMotion && powerTimer < 120 && Math.floor(time * 4) % 2 === 1;
+      const flash = ghost.scared && !reducedMotion && !frozen && powerTimer < 120 && Math.floor(time * 4) % 2 === 1;
       const eyesOnly = ghost.mode === 'eyes';
       ctx.save(); ctx.translate(ghost.x, ghost.y); ctx.scale(tile, tile);
       if (!eyesOnly) {
@@ -114,7 +114,7 @@ const RetroWorldArtwork = (() => {
         ctx.beginPath(); ctx.moveTo(-0.45, 0.45); ctx.lineTo(-0.45, -0.05);
         ctx.arc(0, -0.05, 0.45, Math.PI, Math.PI * 2);
         ctx.lineTo(0.45, 0.45);
-        const step = reducedMotion ? 0 : Math.floor(time * 8) % 2;
+        const step = reducedMotion || frozen ? 0 : Math.floor(time * 8) % 2;
         for (let foot = 1; foot <= 6; foot++) {
           ctx.lineTo(0.45 - foot * 0.15, (foot + step) % 2 ? 0.3 : 0.45);
         }

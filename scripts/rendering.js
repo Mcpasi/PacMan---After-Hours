@@ -99,9 +99,13 @@ const GameRenderer = (() => {
     skin.player(ctx, state.player, options);
     drawTunnelCopy(ctx, tunnelOffset(state.player, state.maze), () => skin.player(ctx, state.player, options));
     skin.ghosts(ctx, state.ghosts, options);
+    FreezePowerUpArtwork.drawFrozenGhosts(ctx, state.ghosts, options);
     for (const offset of [layout.width, -layout.width]) {
       const wrapped = state.ghosts.filter(ghost => tunnelOffset(ghost, state.maze) === offset);
-      if (wrapped.length) drawTunnelCopy(ctx, offset, () => skin.ghosts(ctx, wrapped, options));
+      if (wrapped.length) drawTunnelCopy(ctx, offset, () => {
+        skin.ghosts(ctx, wrapped, options);
+        FreezePowerUpArtwork.drawFrozenGhosts(ctx, wrapped, options);
+      });
     }
   }
 
@@ -112,7 +116,9 @@ const GameRenderer = (() => {
     const retroContext = retroSurface.getContext('2d');
     retroArtwork.drawMaze(retroContext, state.maze);
     BonusLifeArtwork.drawCoin(retroContext, state.bonusLife?.coin, options);
-    drawActors(retroContext, state, options, RetroWorldArtwork);
+    const retroOptions = { ...options, world: 'retro' };
+    FreezePowerUpArtwork.drawPickups(retroContext, state.freezePowerUps, retroOptions);
+    drawActors(retroContext, state, retroOptions, RetroWorldArtwork);
     ctx.save(); ctx.globalAlpha = Math.min(1, mix);
     ctx.drawImage(retroSurface, 0, 0); ctx.restore();
   }
@@ -131,11 +137,14 @@ const GameRenderer = (() => {
     glitchArtwork.draw(ctx, glitch);
     drawCollectibles(ctx, frame, state.maze);
     const options = { tile: TILE, colors: GHOST_COLORS, dirs: DIRS,
-      powerTimer: state.powerTimer, animFrame: reducedMotion ? 0 : state.animFrame, time, reducedMotion };
+      powerTimer: state.powerTimer, animFrame: reducedMotion ? 0 : state.animFrame, time, reducedMotion,
+      frozen: state.freezePowerUps?.remainingTicks > 0 };
     BonusLifeArtwork.drawCoin(ctx, state.bonusLife?.coin, options);
+    FreezePowerUpArtwork.drawPickups(ctx, state.freezePowerUps, options);
     drawActors(ctx, state, options, actors);
     fallback.drawAtmosphere(ctx, frame);
     drawRetroWorld(ctx, state, options);
+    FreezePowerUpArtwork.drawStatus(ctx, state.freezePowerUps, { ...options, width: layout.width });
     PlayerDeathArtwork.draw(ctx, state.playerDeath, options);
     BonusLifeArtwork.drawEffect(ctx, state.bonusLife?.effect, options);
   }
