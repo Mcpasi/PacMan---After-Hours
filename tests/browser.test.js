@@ -75,11 +75,21 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       const file = path.join(root, pathname === '/' ? 'index.html' : decodeURIComponent(pathname));
       if (!file.startsWith(root + path.sep)) { response.writeHead(403).end(); return; }
       const content = await fs.readFile(file);
-      const type = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css' }[path.extname(file)];
-      response.writeHead(200, {
+      const type = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.mp3': 'audio/mpeg' }[path.extname(file)];
+      // Media needs byte ranges to report a finite duration and seek across the loop boundary.
+      const range = request.headers.range?.match(/^bytes=(\d+)-(\d*)$/);
+      const start = range ? Number(range[1]) : 0;
+      const end = range?.[2] ? Math.min(Number(range[2]), content.length - 1) : content.length - 1;
+      if (range && (start >= content.length || end < start)) {
+        response.writeHead(416, { 'Content-Range': `bytes */${content.length}` }).end(); return;
+      }
+      response.writeHead(range ? 206 : 200, {
         'Content-Type': type || 'application/octet-stream',
+        'Content-Length': end - start + 1,
+        'Accept-Ranges': 'bytes',
+        ...(range ? { 'Content-Range': `bytes ${start}-${end}/${content.length}` } : {}),
         'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'"
-      }).end(content);
+      }).end(content.subarray(start, end + 1));
     } catch { response.writeHead(404).end(); }
   });
   t.after(async () => {
@@ -246,7 +256,7 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     delete document.getElementById('gameContainer')[key];
   }`);
   await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
-  await client.evaluate("document.getElementById('startBtn').click()");
+  await client.evaluate("document.getElementById('startBtn').click()", true);
   await waitFor(() => client.evaluate('score > 0 && player.x > 13.5 * TILE'), 'Pac-Man did not move and collect dots.');
   await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'p' });
   await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'p' });
@@ -254,6 +264,42 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   const position = await client.evaluate('player.x');
   await client.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   assert.equal(await client.evaluate('player.x'), position);
+
+  await t.test('the local arcade track plays, loops at its end and resumes without rewinding', async () => {
+    try {
+      await client.evaluate(`(() => {
+        globalThis.musicProbe = new Audio();
+        globalThis.musicTest = BackgroundMusic.create({ createAudio: () => musicProbe });
+        if (!musicTest.play(audioCtx)) throw new Error('Music failed to start');
+      })()`, true);
+      await waitFor(() => client.evaluate('musicProbe.currentTime > 0 && Number.isFinite(musicProbe.duration)'),
+        'The local MP3 did not start playing with a finite, seekable duration.');
+      const track = await client.evaluate(`({ src: musicProbe.currentSrc, loop: musicProbe.loop,
+        muted: musicProbe.muted, paused: musicProbe.paused, duration: musicProbe.duration })`);
+      assert.equal(track.src, `${origin}/sounds/background_sound.mp3`);
+      assert.equal(track.loop, true);
+      assert.equal(track.muted, false);
+      assert.equal(track.paused, false);
+      assert.ok(track.duration > 1);
+      await client.evaluate('musicProbe.currentTime = musicProbe.duration - 0.2');
+      await waitFor(() => client.evaluate('!musicProbe.seeking && !musicProbe.paused && musicProbe.currentTime < 2'),
+        'The music stopped instead of looping back to the beginning.');
+      const pausedAt = await client.evaluate('musicTest.pause(); musicProbe.currentTime');
+      await client.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+      assert.equal(await client.evaluate('musicProbe.currentTime'), pausedAt);
+      await client.evaluate('musicTest.play(audioCtx)', true);
+      await waitFor(() => client.evaluate(`!musicProbe.paused && musicProbe.currentTime > ${pausedAt}`),
+        'The music did not resume from its paused position.');
+    } finally {
+      t.diagnostic(JSON.stringify(await client.evaluate(`(() => {
+        const audio = globalThis.musicProbe;
+        return audio ? { music: audio.currentSrc, time: audio.currentTime, duration: audio.duration,
+          paused: audio.paused, ready: audio.readyState, network: audio.networkState,
+          error: audio.error?.message, context: audioCtx.state } : { music: 'unavailable' };
+      })()`)));
+      await client.evaluate('globalThis.musicTest?.pause(); delete globalThis.musicTest; delete globalThis.musicProbe;');
+    }
+  });
 
   const beforeFullscreen = await client.evaluate('JSON.stringify({ gameState, player, ghosts, maze, score, lives, level })');
   await client.evaluate("document.getElementById('fullscreenBtn').click()", true);

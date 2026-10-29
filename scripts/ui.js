@@ -1,4 +1,5 @@
 function showOverlay(title, msg = '', btn = 'CONTINUE') {
+  updateBackgroundMusic();
   const ov = document.getElementById('overlay');
   if (!title) { ov.style.display = 'none'; return; }
   resetPointerInput();

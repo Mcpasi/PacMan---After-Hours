@@ -21,6 +21,7 @@ function initInput() {
   window.addEventListener('blur', resetPointerInput);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) resetPointerInput();
+    updateBackgroundMusic();
   });
 }
 

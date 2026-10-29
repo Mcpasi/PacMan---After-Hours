@@ -31,6 +31,9 @@ function createAudioContext({ currentTime = 0, state = 'running', sampleRate = 8
     const result = node('filter'); result.frequency = parameter(result, 'frequency'); return result;
   };
   context.createBufferSource = () => node('bufferSource');
+  context.createMediaElementSource = mediaElement => {
+    const result = node('mediaSource'); result.mediaElement = mediaElement; return result;
+  };
   context.createBuffer = (channels, length, rate) => {
     const data = Array.from({ length: channels }, () => new Float32Array(length));
     const result = { numberOfChannels: channels, length, sampleRate: rate, getChannelData: index => data[index] };

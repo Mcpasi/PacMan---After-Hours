@@ -1,6 +1,7 @@
 // ==================== AUDIO ====================
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
+const backgroundMusic = BackgroundMusic.create();
 function initAudio() {
   if (!AudioCtx) return;
   try {
@@ -9,6 +10,14 @@ function initAudio() {
   } catch {
     audioCtx = null; // Sound is optional; unavailable audio must not block Start.
   }
+}
+function updateBackgroundMusic() {
+  if (gameState !== 'playing' || document.hidden) {
+    backgroundMusic.pause();
+    return;
+  }
+  initAudio();
+  backgroundMusic.play(audioCtx);
 }
 function playTone(freq, duration, type = 'square', vol = 0.08) {
   if (!audioCtx) return;

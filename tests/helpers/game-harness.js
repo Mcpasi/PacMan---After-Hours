@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createAudioContext } = require('./audio-context');
+const { createMediaAudio } = require('./media-audio');
 
 const root = path.join(__dirname, '../..');
 const revision = process.env.PACMAN_REVISION;
@@ -17,7 +18,7 @@ const scripts = [...html.matchAll(/<script(?:\s+src="([^"]+)"[^>]*>|>)([\s\S]*?)
   .map(match => ({ name: match[1] || 'inline.js', code: match[1] ? readSource(match[1]) : match[2] }));
 
 function boot(options = {}) {
-  const elements = new Map(), frames = [], timers = [], drawing = [];
+  const elements = new Map(), frames = [], timers = [], drawing = [], media = [];
   const storage = new Map([['pacmanHigh', options.highScore || '0']]);
   function makeContext() {
     return new Proxy({}, {
@@ -88,12 +89,18 @@ function boot(options = {}) {
   window.matchMedia = () => motionPreference;
   if (options.webgl) window.WebGLRenderingContext = function () {};
   if (options.audio !== 'missing') window[options.audio === 'webkit' ? 'webkitAudioContext' : 'AudioContext'] = AudioContext;
+  if (options.music !== 'missing') window.Audio = function () {
+    if (options.music === 'throws') throw new Error('Media unavailable');
+    const audio = createMediaAudio({ playback: options.music });
+    media.push(audio);
+    return audio;
+  };
   const document = new Element();
   document.body = new Element();
   document.getElementById = id => elements.get(id) || null;
   document.createElement = () => new Element();
   const sandbox = {
-    window, document,
+    window, document, Audio: window.Audio,
     localStorage: {
       getItem(key) {
         if (options.storage === 'readThrows') throw new Error('SecurityError');
@@ -122,7 +129,8 @@ function boot(options = {}) {
     timestamp = time + 1000 / 60;
   }
   return {
-    run, elements, frames, drawing, storage, frameAt,
+    run, elements, frames, drawing, storage, frameAt, media,
+    setHidden(value) { document.hidden = !!value; document.emit('visibilitychange'); },
     setReducedMotion(value) { motionPreference.matches = !!value; },
     click(id = 'startBtn') { elements.get(id).emit('click'); },
     key(key, repeat = false, target) {

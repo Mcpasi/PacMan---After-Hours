@@ -85,9 +85,8 @@ function nextLevel() {
 }
 
 function startGame() {
-  initAudio();
   animFrame = 0;
   gameState = 'playing';
-  document.getElementById('overlay').style.display = 'none';
+  showOverlay(null);
   resetLevel(true);
 }
