@@ -23,3 +23,9 @@
 **v.0.1.5** 
 
 **Add:** After each glitch, there is a slow transition to the 1980 look; it remains for 30 seconds with “1980” on the clock, before fading back.
+
+**v.0.1.6**
+
+**Add:** Rusty lantern and ice-covered pocket watch, one of each per level.
+
+- Both freeze all spirits for 4 seconds.
