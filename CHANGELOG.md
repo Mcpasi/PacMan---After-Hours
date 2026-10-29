@@ -29,3 +29,5 @@
 **Add:** Rusty lantern and ice-covered pocket watch, one of each per level.
 
 - Both freeze all spirits for 4 seconds.
+
+**Add:** A somber background music was added.
