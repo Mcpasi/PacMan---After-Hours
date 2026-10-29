@@ -30,6 +30,9 @@
   user-select: none;
   -webkit-touch-callout: none;
 }
+#gameCanvas[data-world="retro"] {
+  image-rendering: pixelated;
+}
 .game-version {
   position: absolute;
   right: 8px;

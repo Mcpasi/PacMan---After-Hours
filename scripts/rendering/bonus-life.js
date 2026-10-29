@@ -8,8 +8,26 @@ const BonusLifeArtwork = (() => {
     ctx.arc(x, y, 0.235, 0.48, circle - 0.48); ctx.closePath(); ctx.fill();
   }
 
-  function drawCoin(ctx, coin, { tile, time = 0, reducedMotion = false }) {
+  function retroCoin(ctx, coin, tile, time, reducedMotion) {
+    const pixel = tile / 16;
+    const turn = reducedMotion ? 1 : [1, 0.75, 0.25, 0.75][Math.floor(time * 4) % 4];
+    ctx.save();
+    ctx.translate(Math.round(coin.x / pixel) * pixel, Math.round(coin.y / pixel) * pixel);
+    ctx.scale(pixel, pixel);
+    for (let y = -6; y < 6; y++) for (let x = -7; x < 7; x++) {
+      const dx = (x + 0.5) / turn, dy = y + 0.5, radius = dx * dx + dy * dy;
+      if (radius > 36) continue;
+      ctx.fillStyle = radius > 24 ? '#ffb852' : '#ffff00';
+      // A small, dark Pac-Man stamp distinguishes the life coin from power pellets.
+      if (radius < 9 && !(dx > 0 && Math.abs(dy) < dx)) ctx.fillStyle = '#000000';
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.restore();
+  }
+
+  function drawCoin(ctx, coin, { tile, time = 0, reducedMotion = false, world = 'city' }) {
     if (!coin) return;
+    if (world === 'retro') { retroCoin(ctx, coin, tile, time, reducedMotion); return; }
     const phase = reducedMotion ? 0 : time * 0.8;
     const turn = Math.max(0.14, Math.abs(Math.cos(phase)));
     const hover = reducedMotion ? 0 : Math.sin(time * 1.3) * 0.035;

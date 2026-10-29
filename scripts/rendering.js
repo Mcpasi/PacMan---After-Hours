@@ -111,15 +111,18 @@ const GameRenderer = (() => {
 
   function drawRetroWorld(ctx, state, options) {
     const mix = state.retroWorld?.mix || 0;
+    surface.dataset.world = mix > 0 ? 'retro' : 'city';
     if (mix <= 0) return;
     // Blend a complete opaque scene, so sprites, rain and GPU scenery fade together.
     const retroContext = retroSurface.getContext('2d');
+    retroContext.imageSmoothingEnabled = false;
     retroArtwork.drawMaze(retroContext, state.maze);
-    BonusLifeArtwork.drawCoin(retroContext, state.bonusLife?.coin, options);
     const retroOptions = { ...options, world: 'retro' };
+    BonusLifeArtwork.drawCoin(retroContext, state.bonusLife?.coin, retroOptions);
     FreezePowerUpArtwork.drawPickups(retroContext, state.freezePowerUps, retroOptions);
     drawActors(retroContext, state, retroOptions, RetroWorldArtwork);
     ctx.save(); ctx.globalAlpha = Math.min(1, mix);
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(retroSurface, 0, 0); ctx.restore();
   }
 

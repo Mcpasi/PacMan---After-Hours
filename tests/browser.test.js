@@ -728,6 +728,49 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     assert.equal(visit.restored, true, 'the present-day scene returns without stale retro pixels');
   });
 
+  await t.test('the 8-bit world has only hard palette pixels and uses sharp scaling only during its visit', async () => {
+    const result = await client.evaluate(`(() => {
+      const context = canvas.getContext('2d'), timestamp = performance.now();
+      const before = JSON.stringify({ maze, player, ghosts, score, lives, bonus: bonusLife.state });
+      const state = { maze, player: { ...player, x: -4.3, y: 184.3, mouth: 0.6 },
+        ghosts: [{ ...ghosts[0], x: 64.4, y: 184.3, mode: 'chase', scared: false }],
+        bonusLife: { coin: { x: 88.4, y: 24.7 } },
+        freezePowerUps: { pickups: [{ kind: 'lantern', x: 120.4, y: 24.7 },
+          { kind: 'watch', x: 152.4, y: 24.7 }], remainingTicks: 0 },
+        animFrame: 0, powerTimer: 0, gameState: 'paused', retroWorld: { mix: 1 } };
+      context.imageSmoothingEnabled = true;
+      GameRenderer.render(timestamp, state);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const allowed = new Set(['0,0,0', '33,33,255', '255,184,255', '255,184,174',
+        '255,255,0', '255,0,0', '255,255,255', '255,184,82', '0,255,255', '16,44,87']);
+      const colors = new Set();
+      let invalid = 0, left = 0, right = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const color = pixels.slice(i, i + 3).join(','); colors.add(color);
+        if (pixels[i + 3] !== 255 || !allowed.has(color)) invalid++;
+        const x = (i / 4) % canvas.width, y = Math.floor(i / 4 / canvas.width);
+        if (color === '255,255,0' && y >= 176 && y < 192) {
+          if (x < 16) left++;
+          if (x >= canvas.width - 16) right++;
+        }
+      }
+      const scaling = [];
+      for (const mix of [1, 0.5, 0]) {
+        state.retroWorld.mix = mix; GameRenderer.render(timestamp, state);
+        scaling.push([canvas.dataset.world, getComputedStyle(canvas).imageRendering]);
+      }
+      return { invalid, colors: colors.size, left, right, scaling,
+        smoothingRestored: context.imageSmoothingEnabled,
+        unchanged: JSON.stringify({ maze, player, ghosts, score, lives, bonus: bonusLife.state }) === before };
+    })()`);
+    assert.equal(result.invalid, 0, 'no antialiased colors, gradients or translucent sprite edges may enter the retro scene');
+    assert.ok(result.colors >= 8, 'maze, sprites, coin and freeze finds must all contribute their arcade colors');
+    assert.ok(result.left > 0 && result.right > 0, 'snapped pixel sprites must remain visible on both tunnel edges');
+    assert.deepEqual(result.scaling, [['retro', 'pixelated'], ['retro', 'pixelated'], ['city', 'auto']]);
+    assert.equal(result.smoothingRestored, true, 'the pixel layer must not change modern Canvas smoothing');
+    assert.equal(result.unchanged, true);
+  });
+
   const deathArtwork = await client.evaluate(`(() => {
     const surface = document.createElement('canvas'); surface.width = surface.height = 256;
     const ctx = surface.getContext('2d'), signatures = [], reduced = [];

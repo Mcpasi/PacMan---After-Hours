@@ -50,22 +50,32 @@ const FreezePowerUpArtwork = (() => {
     // Compact pixel silhouettes remain distinct from pellets and the life coin.
     ctx.fillStyle = '#00ffff';
     if (kind === 'lantern') {
-      ctx.fillRect(-0.3, -0.3, 0.6, 0.7); ctx.fillRect(-0.4, -0.4, 0.8, 0.1);
-      ctx.fillRect(-0.2, -0.5, 0.4, 0.1); ctx.fillRect(-0.1, -0.6, 0.2, 0.1);
-      ctx.fillRect(-0.4, 0.4, 0.8, 0.1);
+      ctx.fillRect(-5, -5, 10, 11); ctx.fillRect(-6, -6, 12, 1);
+      ctx.fillRect(-3, -8, 6, 2); ctx.fillRect(-1, -9, 2, 1);
+      ctx.fillRect(-6, 6, 12, 2);
     } else {
-      ctx.fillRect(-0.4, -0.2, 0.8, 0.5); ctx.fillRect(-0.3, -0.3, 0.6, 0.7);
-      ctx.fillRect(-0.2, -0.4, 0.4, 0.1); ctx.fillRect(-0.1, -0.6, 0.2, 0.2);
+      ctx.fillRect(-6, -3, 12, 8); ctx.fillRect(-5, -5, 10, 11);
+      ctx.fillRect(-3, -6, 6, 1); ctx.fillRect(-1, -9, 2, 3);
     }
-    ctx.fillStyle = '#102c57'; ctx.fillRect(-0.2, -0.2, 0.4, 0.5);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(-0.15, 0, 0.3, 0.1); ctx.fillRect(-0.05, -0.1, 0.1, 0.3);
+    ctx.fillStyle = '#102c57'; ctx.fillRect(-3, -3, 6, 8);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-2, 0, 4, 1); ctx.fillRect(-1, -2, 2, 5);
+  }
+
+  function retroContext(ctx, actor, tile) {
+    const pixel = tile / 16;
+    ctx.save();
+    ctx.translate(Math.round(actor.x / pixel) * pixel, Math.round(actor.y / pixel) * pixel);
+    ctx.scale(pixel, pixel);
   }
 
   function drawPickups(ctx, state, { tile, time = 0, reducedMotion = false, world = 'city' }) {
     for (const pickup of state?.pickups || []) {
-      ctx.save(); ctx.translate(pickup.x, pickup.y); ctx.scale(tile, tile);
-      if (world === 'retro') retroPickup(ctx, pickup.kind);
+      if (world === 'retro') {
+        retroContext(ctx, pickup, tile);
+        retroPickup(ctx, pickup.kind);
+      }
       else {
+        ctx.save(); ctx.translate(pickup.x, pickup.y); ctx.scale(tile, tile);
         ctx.fillStyle = 'rgba(122, 204, 213, 0.18)';
         ctx.beginPath(); ctx.ellipse(0, 0.4, 0.48, 0.1, 0, 0, circle); ctx.fill();
         ctx.translate(0, reducedMotion ? -0.06 : -0.06 + Math.sin(time * 1.5) * 0.025);
@@ -79,20 +89,25 @@ const FreezePowerUpArtwork = (() => {
     if (!frozen) return;
     for (const ghost of ghosts) {
       if (ghost.mode === 'house' && ghost.houseTimer > 30) continue;
-      ctx.save(); ctx.translate(ghost.x, ghost.y); ctx.scale(tile, tile);
-      ctx.strokeStyle = world === 'retro' ? '#00ffff' : '#b6e9ed'; ctx.lineWidth = 0.045;
       if (world === 'retro') {
+        retroContext(ctx, ghost, tile);
+        ctx.fillStyle = '#00ffff';
         for (const side of [-1, 1]) {
-          ctx.beginPath(); ctx.moveTo(side * 0.4, -0.65); ctx.lineTo(side * 0.6, -0.65);
-          ctx.lineTo(side * 0.6, 0.55); ctx.lineTo(side * 0.4, 0.55); ctx.stroke();
+          const x = side < 0 ? -10 : 7;
+          ctx.fillRect(x, -10, 3, 1); ctx.fillRect(side < 0 ? -10 : 9, -10, 1, 19);
+          ctx.fillRect(x, 8, 3, 1);
         }
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(5, -11, 1, 5); ctx.fillRect(3, -9, 5, 1);
+        ctx.restore();
       } else {
+        ctx.save(); ctx.translate(ghost.x, ghost.y); ctx.scale(tile, tile);
+        ctx.strokeStyle = '#b6e9ed'; ctx.lineWidth = 0.045;
         // A translucent frost shell leaves identity, frightened faces and eyes readable.
         ctx.fillStyle = 'rgba(147, 220, 232, 0.12)';
         ctx.beginPath(); ctx.moveTo(0, -0.85); ctx.lineTo(0.58, -0.4); ctx.lineTo(0.55, 0.5);
         ctx.lineTo(0, 0.65); ctx.lineTo(-0.55, 0.5); ctx.lineTo(-0.58, -0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.translate(0.4, -0.6); snowflake(ctx, 0.14); ctx.restore();
       }
-      ctx.translate(0.4, -0.6); snowflake(ctx, 0.14); ctx.restore();
     }
   }
 
