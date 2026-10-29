@@ -53,6 +53,23 @@ test('placement never enters doors, the ghost house, power pellets or disconnect
   }
 });
 
+test('reserved bonus positions stay clear, including across horizontal tunnel seams', () => {
+  const maze = [Array(12).fill(0), Array(12).fill(2), Array(12).fill(0)];
+  const reserved = [{ x: tile / 2, y: 1.5 * tile }], before = structuredClone({ maze, reserved });
+  const bonus = FreezePowerUps.create(maze, tile, { origin: { x: 6.5 * tile, y: 1.5 * tile }, reserved });
+  assert.equal(bonus.state.pickups.length, 2);
+  for (const pickup of bonus.state.pickups) {
+    const dx = Math.abs(pickup.x - reserved[0].x);
+    assert.ok(Math.min(dx, 12 * tile - dx) >= tile * 1.5);
+  }
+  assert.deepEqual({ maze, reserved }, before);
+  assert.deepEqual(FreezePowerUps.create([[2, 2]], tile, { origin: { x: tile / 2, y: tile / 2 },
+    reserved: [{ x: 1.5 * tile, y: tile / 2 }] }).state.pickups, [], 'small maps never force overlapping finds');
+  for (const reserved of [null, {}, [null], [{ x: NaN, y: 0 }], [{ x: 0, y: Infinity }]]) {
+    assert.throws(() => FreezePowerUps.create(maze, tile, { origin, reserved }), TypeError);
+  }
+});
+
 test('reachability and collection use horizontal tunnels but never vertical wrapping', () => {
   const maze = [[0, 0, 2, 0, 0, 0, 0], [2, 0, 0, 0, 0, 2, 2], [0, 0, 2, 0, 0, 0, 0]];
   const bonus = FreezePowerUps.create(maze, tile, { origin: { ...origin, x: tile / 2 } });

@@ -7,6 +7,7 @@ let player, ghosts = [], score = 0, highScore = 0, lives = 3;
 let level = 1;
 let ghostController, ghostLearning;
 let bonusLife;
+let cherryBonus;
 let freezePowerUps;
 let level256Glitch;
 let retroWorld;

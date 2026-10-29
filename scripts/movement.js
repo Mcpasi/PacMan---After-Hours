@@ -104,6 +104,12 @@ function updatePlayer() {
     updateUI();
   }
   if (freezePowerUps.collect(player)) playPower();
+  const cherryPoints = cherryBonus.collect(player, retroWorld.state);
+  if (cherryPoints) {
+    score += cherryPoints;
+    playChomp();
+    updateUI();
+  }
   if (dotsLeft <= 0) {
     gameState = 'levelComplete';
     showOverlay('LEVEL COMPLETE!', 'Press Enter or click to continue', 'NEXT LEVEL');

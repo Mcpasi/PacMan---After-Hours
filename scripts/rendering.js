@@ -120,6 +120,7 @@ const GameRenderer = (() => {
     const retroOptions = { ...options, world: 'retro' };
     BonusLifeArtwork.drawCoin(retroContext, state.bonusLife?.coin, retroOptions);
     FreezePowerUpArtwork.drawPickups(retroContext, state.freezePowerUps, retroOptions);
+    CherryBonusArtwork.draw(retroContext, state.cherryBonus?.fruit, retroOptions);
     drawActors(retroContext, state, retroOptions, RetroWorldArtwork);
     ctx.save(); ctx.globalAlpha = Math.min(1, mix);
     ctx.imageSmoothingEnabled = false;

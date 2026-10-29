@@ -2,10 +2,11 @@
 const FreezePowerUps = (() => {
   const kinds = ['lantern', 'watch'];
 
-  function create(maze, tile, { origin, ticksPerSecond = 60 } = {}) {
+  function create(maze, tile, { origin, ticksPerSecond = 60, reserved = [] } = {}) {
     if (!maze.length || !maze[0].length || maze.some(row => row.length !== maze[0].length) ||
         !Number.isFinite(tile) || tile <= 0 || !Number.isFinite(ticksPerSecond) || ticksPerSecond <= 0 ||
-        !Number.isFinite(origin?.x) || !Number.isFinite(origin?.y)) {
+        !Number.isFinite(origin?.x) || !Number.isFinite(origin?.y) || !Array.isArray(reserved) ||
+        reserved.some(point => !Number.isFinite(point?.x) || !Number.isFinite(point?.y))) {
       throw new TypeError('Freeze pickups need a rectangular grid, positive tile size/tick rate and an origin.');
     }
     const rows = maze.length, cols = maze[0].length, width = cols * tile;
@@ -31,8 +32,12 @@ const FreezePowerUps = (() => {
 
     const reachable = flood(start);
     // Spread the two finds along actual streets, not across walls. Never cover
-    // a power pellet, the spawn, a door, the house or disconnected scenery.
-    const candidates = reachable.cells.filter(cell => key(cell) !== key(start) && maze[cell.row][cell.col] !== 3);
+    // a power pellet, the spawn, a door, the house, another bonus or disconnected scenery.
+    const candidates = reachable.cells.filter(cell => key(cell) !== key(start) && maze[cell.row][cell.col] !== 3 &&
+      reserved.every(point => {
+        const dx = Math.abs((cell.col + 0.5) * tile - point.x) % width;
+        return Math.hypot(Math.min(dx, width - dx), (cell.row + 0.5) * tile - point.y) >= tile * 1.5;
+      }));
     const pickups = [];
     let separation = reachable.distances;
     for (const kind of kinds) {

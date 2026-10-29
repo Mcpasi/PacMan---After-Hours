@@ -26,6 +26,7 @@ function loop(ts) {
       checkCollisions();
       if (player.alive) {
         retroWorld.update();
+        cherryBonus.update(retroWorld.state);
         level256Glitch.update();
       }
     }
@@ -34,6 +35,7 @@ function loop(ts) {
   updateWorldClock();
   GameRenderer.render(ts, { maze, player, ghosts, powerTimer, animFrame, gameState,
     bonusLife: bonusLife.state, playerDeath: playerDeath?.state,
+    cherryBonus: cherryBonus.state,
     freezePowerUps: freezePowerUps.state,
     retroWorld: retroWorld.state,
     level256Glitch: player.alive && (gameState === 'playing' || gameState === 'paused')

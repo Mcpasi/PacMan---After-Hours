@@ -43,7 +43,12 @@ function resetLevel(isNewGame = false) {
       if (maze[r][c] === 2 || maze[r][c] === 3) dotsLeft++;
   resetActors();
   bonusLife = BonusLife.create(maze, TILE, { origin: player, ticksPerSecond: SIMULATION_HZ });
-  freezePowerUps = FreezePowerUps.create(maze, TILE, { origin: player, ticksPerSecond: SIMULATION_HZ });
+  if (isNewGame || !cherryBonus) cherryBonus = CherryBonus.create(maze, TILE, { origin: player });
+  else cherryBonus.setMaze(maze, { origin: player });
+  cherryBonus.update(retroWorld.state);
+  const cherryPosition = cherryBonus.position;
+  freezePowerUps = FreezePowerUps.create(maze, TILE, { origin: player, ticksPerSecond: SIMULATION_HZ,
+    reserved: cherryPosition ? [cherryPosition] : [] });
 }
 
 function resetActors() {
