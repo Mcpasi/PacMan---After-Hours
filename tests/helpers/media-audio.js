@@ -1,6 +1,6 @@
 function createMediaAudio({ playback = 'playing' } = {}) {
   return {
-    src: '', loop: false, preload: '', paused: true, currentTime: 0, plays: 0, pauses: 0, playback,
+    src: '', loop: false, preload: '', volume: 1, paused: true, currentTime: 0, plays: 0, pauses: 0, playback,
     play() {
       this.plays++;
       if (this.playback === 'throws') throw new Error('Media playback unavailable');

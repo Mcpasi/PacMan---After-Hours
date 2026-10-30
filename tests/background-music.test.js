@@ -45,6 +45,37 @@ test('repeated starts reuse one stream, while pause and resume preserve its posi
   assert.equal(context.nodes.length, 2, 'resume must not duplicate the audio graph');
 });
 
+test('local files play quietly without a CORS-silenced Web Audio media source', () => {
+  const context = createAudioContext();
+  const audio = createMediaAudio();
+  const music = BackgroundMusic.create({ createAudio: () => audio, protocol: 'file:' });
+  assert.equal(music.play(context), true);
+  assert.equal(audio.volume, 0.025);
+  assert.equal(audio.loop, true);
+  assert.equal(audio.paused, false);
+  assert.equal(context.nodes.length, 0, 'local media must not be routed through Web Audio');
+  audio.currentTime = 42;
+  music.play(context);
+  assert.equal(audio.plays, 1);
+  music.pause();
+  assert.equal(audio.paused, true);
+  music.play(context);
+  assert.equal(audio.currentTime, 42);
+  assert.equal(audio.plays, 2);
+});
+
+for (const protocol of ['http:', 'https:']) {
+  test(`${protocol} keeps the quiet Web Audio bus for browsers that ignore media volume`, () => {
+    const context = createAudioContext();
+    const audio = createMediaAudio();
+    const music = BackgroundMusic.create({ createAudio: () => audio, protocol });
+    assert.equal(music.play(context), true);
+    assert.equal(audio.volume, 1);
+    assert.deepEqual(context.nodes.map(node => node.kind), ['mediaSource', 'gain']);
+    assert.deepEqual(context.nodes[1].automation, [['gain', 'set', 0.025, 0]]);
+  });
+}
+
 test('a replaced audio context releases the previous stream and graph before reconnecting', () => {
   const first = createAudioContext(), second = createAudioContext();
   const media = [];

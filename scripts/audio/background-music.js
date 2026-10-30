@@ -1,9 +1,9 @@
-// Stream the arcade track through its own quiet bus; effects keep their full volume.
+// Keep the arcade track quiet without changing effect volume.
 const BackgroundMusic = (() => {
   const SOURCE = 'sounds/background_sound.mp3';
   const VOLUME = 0.025;
 
-  function create({ createAudio = () => new Audio() } = {}) {
+  function create({ createAudio = () => new Audio(), protocol = globalThis.location?.protocol } = {}) {
     let audio = null, context = null, source = null, gain = null;
 
     function pause() {
@@ -26,12 +26,17 @@ const BackgroundMusic = (() => {
           audio.loop = true;
           audio.preload = 'auto';
           context = audioContext;
-          source = context.createMediaElementSource(audio);
-          gain = context.createGain();
-          // Web Audio gain also works on mobile browsers that ignore media volume.
-          gain.gain.setValueAtTime(VOLUME, context.currentTime);
-          source.connect(gain);
-          gain.connect(context.destination);
+          if (protocol === 'file:') {
+            // Edge silences file:// media routed through Web Audio because of CORS.
+            audio.volume = VOLUME;
+          } else {
+            source = context.createMediaElementSource(audio);
+            gain = context.createGain();
+            // Web Audio gain also works on mobile browsers that ignore media volume.
+            gain.gain.setValueAtTime(VOLUME, context.currentTime);
+            source.connect(gain);
+            gain.connect(context.destination);
+          }
         }
         if (audio.paused) audio.play()?.catch(() => {});
         return true;
