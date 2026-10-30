@@ -6,6 +6,8 @@
 
 The name will soon be changed to **After Hours – 46 Years Later**
 
+Name change in **After Hours: 46 years later**, it will be introduced in the next 2 weeks
+
 **A modularly designed Pac-Man game, set in a dark atmosphere**
 
 **Play Pac-Man - After Hours now:** In a dark, alternate world, Pac-Man tries to escape the ghosts; he can only temporarily daze them by using his power-ups. Can you reach the power-ups in time, before the ghosts catch you?
