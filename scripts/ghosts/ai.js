@@ -25,6 +25,8 @@ const GhostAI = (() => {
   }
 
   function plan(ghosts, player, navigation, learning, powerMode = false) {
+    // Project search areas from the same wrapped position used by cellAt.
+    player = { ...player, x: ((player.x % navigation.width) + navigation.width) % navigation.width };
     const targets = new Map(), reserved = [];
     const predicted = learning ? learning.predict(player, navigation, powerMode) : [];
     const active = ghosts.filter(ghost => ghost.mode === 'chase' && !ghost.scared)

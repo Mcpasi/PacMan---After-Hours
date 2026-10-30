@@ -50,7 +50,8 @@ const GhostController = (() => {
             }
             let target;
             if (ghost.mode === 'eyes') target = profiles.home;
-            else if (ghost.scared) target = navigation.nearest(player, cell);
+            else if (ghost.scared) target = navigation.nearest({ ...player,
+              x: ((player.x % navigation.width) + navigation.width) % navigation.width }, cell);
             else {
               targets ||= ai.plan(ghosts, player, navigation, learning, powerMode);
               target = targets.get(ghost);

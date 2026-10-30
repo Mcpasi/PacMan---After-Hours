@@ -17,15 +17,23 @@ const GhostLearning = (() => {
       return navigation.neighbors(cell).length ? cell : null;
     }
 
+    function progressFromCenter(player, navigation, cell, dir) {
+      const center = navigation.point(cell), [dx, dy] = dirs[dir];
+      // Tunnel coordinates must match the wrapped cell before comparing centers.
+      const x = ((player.x % navigation.width) + navigation.width) % navigation.width;
+      return (x - center.x) * dx + (player.y - center.y) * dy;
+    }
+
     function observe(player, navigation, powered = false) {
       const cell = playerCell(player, navigation);
       if (!cell) { resetObservation(); return; }
       if (sameCell(previous?.cell, cell)) {
         previous.powered = powered;
+        previous.reachedCenter ||= progressFromCenter(player, navigation, cell, previous.incoming ?? player.dir) >= -1e-6;
         return; // Waiting and extra simulation/render ticks are not extra choices.
       }
       const edge = previous && navigation.neighbors(previous.cell).find(next => sameCell(next, cell) && next.dir === player.dir);
-      if (edge && previous.incoming !== null && previous.powered === powered) {
+      if (edge && previous.incoming !== null && previous.reachedCenter && previous.powered === powered) {
         const context = key(previous.cell, previous.incoming, powered);
         const counts = turns.get(context) || [0, 0, 0, 0];
         for (let dir = 0; dir < counts.length; dir++) counts[dir] *= decay;
@@ -33,7 +41,9 @@ const GhostLearning = (() => {
         turns.set(context, counts);
       }
       // Non-neighbor jumps (including respawns) must never become learned paths.
-      previous = { cell, incoming: edge ? edge.dir : null, powered };
+      // An approach cancelled before the center is not a choice at that junction.
+      previous = { cell, incoming: edge ? edge.dir : null, powered,
+        reachedCenter: progressFromCenter(player, navigation, cell, edge ? edge.dir : player.dir) >= -1e-6 };
     }
 
     function preferred(cell, incoming, powered, options) {
@@ -60,11 +70,8 @@ const GhostLearning = (() => {
         const options = navigation.neighbors(cell), choice = preferred(cell, incoming, powered, options);
         let next = choice;
         if (step === 0) {
-          const center = navigation.point(cell), [dx, dy] = dirs[player.dir];
-          // Tunnel coordinates must match the wrapped cell before comparing centers.
-          const x = ((player.x % navigation.width) + navigation.width) % navigation.width;
           // Once past a center, respect the actual turn instead of an old habit.
-          const committed = incoming !== player.dir || (x - center.x) * dx + (player.y - center.y) * dy > 1e-6;
+          const committed = incoming !== player.dir || progressFromCenter(player, navigation, cell, player.dir) > 1e-6;
           if (committed) next = options.find(option => option.dir === player.dir);
         }
         if (!next) {

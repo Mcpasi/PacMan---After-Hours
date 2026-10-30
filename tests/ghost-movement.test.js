@@ -67,6 +67,23 @@ test('both ghost tunnel directions preserve speed and wrap without an off-grid t
   }
 });
 
+test('equivalent player coordinates at the tunnel seam preserve chase and frightened routing', () => {
+  const game = boot(), maze = JSON.parse(game.run('JSON.stringify(maze)'));
+  const navigation = GhostNavigation.create(maze, tile);
+  for (const scared of [false, true]) {
+    const outcomes = [-2, navigation.width - 2].map(x => {
+      const ghost = actor('blinky', 14, 4, 1);
+      ghost.scared = scared;
+      const pacman = { ...player(27, 11, 2), x };
+      GhostController.create(maze, tile).update([ghost], pacman, scared);
+      assert.deepEqual(pacman, { ...player(27, 11, 2), x }, 'routing must not mutate the player');
+      return ghost;
+    });
+    assert.deepEqual(outcomes[0], outcomes[1], `equivalent tunnel positions must agree (scared=${scared})`);
+    assert.deepEqual(outcomes[0].target, navigation.point({ col: 27, row: 11 }));
+  }
+});
+
 test('frightened ghosts reverse once and flee continuously at the slower speed', () => {
   const controller = GhostController.create(corridor(), tile), ghost = actor('blinky', 8, 3), pacman = player(12, 3);
   ghost.scared = true; ghost.reversePending = true;

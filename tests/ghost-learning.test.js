@@ -46,6 +46,31 @@ test('waiting, repeated observations and prediction calls cannot manufacture a h
   assert.deepEqual(learning.predict(player(8, 8), navigation), quick.predict(player(8, 8), navigation));
 });
 
+test('reversing before a junction center does not teach a turn at that junction', () => {
+  const game = boot();
+  game.click();
+  game.run(`
+    ghosts = [];
+    globalThis.routeNavigation = GhostNavigation.create(maze, TILE);
+    globalThis.furthestX = 0;
+    for (let pass = 0; pass < 3; pass++) {
+      ghostLearning.resetObservation();
+      Object.assign(player, { x: 5.5 * TILE, y: 1.5 * TILE, dir: 0, nextDir: 0, speed: 2 });
+      updateGhosts();
+      for (let tick = 0; tick < 5; tick++) { updatePlayer(); updateGhosts(); }
+      furthestX = Math.max(furthestX, player.x);
+      player.nextDir = 2;
+      for (let tick = 0; tick < 5; tick++) { updatePlayer(); updateGhosts(); }
+    }
+    ghostLearning.resetObservation();
+  `);
+  assert.equal(game.run('furthestX'), 98, 'the player entered the junction tile');
+  assert.ok(game.run('furthestX < 6.5 * TILE'), 'the junction center at x=104 was never reached');
+  const forecast = game.run(`JSON.stringify(ghostLearning.predict(
+    { x: 6.5 * TILE, y: 1.5 * TILE, dir: 0, alive: true }, routeNavigation))`);
+  assert.equal(forecast, '[]', 'cancelled approaches must not manufacture a junction habit');
+});
+
 test('mixed choices stay uncertain and recent behavior replaces even a long-standing habit', () => {
   const navigation = GhostNavigation.create(arena(), tile), mixed = GhostLearning.create();
   for (let pass = 0; pass < 30; pass++) walk(mixed, navigation, pass % 2 ? north : south);
