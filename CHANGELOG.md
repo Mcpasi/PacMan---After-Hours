@@ -35,3 +35,7 @@
 **v.0.1.7**
 
 **Add:** The 1980s world now uses crisp 8-bit pixel graphics for the maze, characters, coins, and power-ups. The game mechanics and world-switching remain unchanged.
+
+**v.0.1.8**
+
+**Fix** fix: a bug in the ghost AI and in the learning logic fixed
