@@ -80,11 +80,11 @@ const GameRenderer = (() => {
     }
   }
 
-  function tunnelOffset(actor, maze) {
+  function tunnelOffset(actor, maze, margin = TILE) {
     const row = maze[Math.floor(actor.y / TILE)];
     if (!row || row[0] === 0 || row[row.length - 1] === 0) return 0;
-    if (actor.x < TILE) return layout.width;
-    if (actor.x > layout.width - TILE) return -layout.width;
+    if (actor.x < margin) return layout.width;
+    if (actor.x > layout.width - margin) return -layout.width;
     return 0;
   }
 
@@ -150,6 +150,11 @@ const GameRenderer = (() => {
     drawRetroWorld(ctx, state, options);
     FreezePowerUpArtwork.drawStatus(ctx, state.freezePowerUps, { ...options, width: layout.width });
     PlayerDeathArtwork.draw(ctx, state.playerDeath, options);
+    if (state.playerDeath) {
+      // Flying fragments reach farther than an intact actor's one-tile margin.
+      drawTunnelCopy(ctx, tunnelOffset(state.playerDeath, state.maze, TILE * 3),
+        () => PlayerDeathArtwork.draw(ctx, state.playerDeath, options));
+    }
     BonusLifeArtwork.drawEffect(ctx, state.bonusLife?.effect, options);
   }
 

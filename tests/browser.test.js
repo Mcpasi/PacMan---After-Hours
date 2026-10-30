@@ -206,6 +206,73 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     }
   });
 
+  await t.test('death fragments remain visible across the tunnel seam throughout their flight', async () => {
+    const samples = await client.evaluate(`(() => {
+      const context = canvas.getContext('2d'), timestamp = performance.now();
+      const state = { maze, player: { ...player, alive: false }, ghosts: [],
+        powerTimer: 0, animFrame: 0, gameState: 'paused' };
+      const results = [];
+      for (const [x, age] of [[-4, 0], [4, 0], [436, 0], [24, 30], [424, 30]]) {
+        GameRenderer.render(timestamp, state);
+        const before = context.getImageData(0, 144, canvas.width, 80).data;
+        const effect = PlayerDeath.create({ x, y: 184, dir: 2, mouth: 0.3 }).state;
+        effect.age = age;
+        // Rasterize the complete wrapped effect as the oracle. Some pieces have
+        // not crossed the seam yet, so both sides need not contain pixels.
+        for (const offset of [0, canvas.width, -canvas.width]) {
+          context.save(); context.translate(offset, 0);
+          PlayerDeathArtwork.draw(context, effect, { tile: TILE }); context.restore();
+        }
+        const expected = context.getImageData(0, 144, canvas.width, 80).data;
+        GameRenderer.render(timestamp, { ...state, playerDeath: effect });
+        const after = context.getImageData(0, 144, canvas.width, 80).data;
+        let left = 0, right = 0, mismatches = 0;
+        for (let row = 0; row < 80; row++) for (let col = 0; col < canvas.width; col++) {
+          const i = (row * canvas.width + col) * 4;
+          if (after.slice(i, i + 4).some((value, channel) => value !== expected[i + channel])) mismatches++;
+          if (!after.slice(i, i + 4).some((value, channel) => value !== before[i + channel])) continue;
+          if (col < 48) left++;
+          if (col >= canvas.width - 48) right++;
+        }
+        results.push({ x, age, left, right, mismatches });
+      }
+      return results;
+    })()`);
+    t.diagnostic(JSON.stringify(samples));
+    for (const sample of samples) {
+      assert.equal(sample.mismatches, 0, `death fragments clipped: ${JSON.stringify(sample)}`);
+    }
+  });
+
+  await t.test('a life label on the top street retains every pixel of the unclipped label', async () => {
+    const samples = await client.evaluate(`(() => {
+      const surface = document.createElement('canvas'); surface.width = 448; surface.height = 496;
+      const context = surface.getContext('2d'), results = [];
+      for (const reducedMotion of [false, true]) {
+        const counts = [];
+        for (const padding of [0, 96]) {
+          context.clearRect(0, 0, surface.width, surface.height);
+          context.save(); context.translate(0, padding);
+          BonusLifeArtwork.drawEffect(context, { x: 216, y: 24, age: 54, duration: 72 }, { tile: 16, reducedMotion });
+          context.restore();
+          const data = context.getImageData(0, 0, surface.width, surface.height).data;
+          let pixels = 0, alpha = 0;
+          for (let index = 3; index < data.length; index += 4) {
+            if (data[index]) pixels++;
+            alpha += data[index];
+          }
+          counts.push({ pixels, alpha });
+        }
+        results.push({ reducedMotion, top: counts[0], reference: counts[1] });
+      }
+      return results;
+    })()`);
+    t.diagnostic(JSON.stringify(samples));
+    for (const sample of samples) {
+      assert.deepEqual(sample.top, sample.reference, `life label clipped with reducedMotion=${sample.reducedMotion}`);
+    }
+  });
+
   await t.test('the complete title overlay fits a small square viewport', async () => {
     try {
       for (const [width, height] of [[360, 360], [320, 320], [400, 400]]) {
@@ -348,16 +415,33 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.equal(await client.evaluate('pointerStart === null'), true);
 
+  async function moveReversalTouch(x, y) {
+    // CDP can acknowledge a move before the game's pointermove handler runs.
+    // Register after that handler and wait for the actual event, not a direction.
+    await client.evaluate(`(() => {
+      globalThis.reversalMoveHandled = new Promise(resolve => {
+        function handled(event) {
+          if (!event.isPrimary || event.clientX !== ${x} || event.clientY !== ${y}) return;
+          canvas.removeEventListener('pointermove', handled);
+          resolve();
+        }
+        canvas.addEventListener('pointermove', handled);
+      });
+    })()`);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(x, y)] });
+    await client.evaluate('reversalMoveHandled');
+  }
+
   for (const [dir, dx, dy] of [[0, 1, 0], [1, 0, 1], [2, -1, 0], [3, 0, -1]]) {
     await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
     for (const distance of [40, 43, 47, 51, 50, 47, 44, 40, 39]) {
-      await client.send('Input.dispatchTouchEvent', { type: 'touchMove',
-        touchPoints: [touch(touchOrigin.x + dx * distance, touchOrigin.y + dy * distance)] });
+      await moveReversalTouch(touchOrigin.x + dx * distance, touchOrigin.y + dy * distance);
       if (distance !== 39) assert.equal(await client.evaluate('player.nextDir'), dir, 'sub-threshold native motion must not reverse');
     }
     assert.equal(await client.evaluate('player.nextDir'), (dir + 2) % 4, `12px native touch reversal after direction ${dir}`);
     await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   }
+  await client.evaluate('delete globalThis.reversalMoveHandled');
 
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(touchOrigin.x, touchOrigin.y)] });
   // Supply deterministic history: CDP's native moves do not guarantee batching.

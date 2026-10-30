@@ -193,3 +193,21 @@ test('ambient time freezes on pause and respects reduced-motion preferences', ()
     assert.ok(game.run('visualFrames.at(-1).time') > time);
   }
 });
+
+test('death fragments keep tunnel copies even when their flight exceeds the actor radius', () => {
+  const game = boot({ reducedMotion: true });
+  game.run(`globalThis.deathDraws = [];
+    PlayerDeathArtwork.draw = (ctx, effect) => deathDraws.push(effect.x);`);
+  for (const [x, y, offset] of [[-4, 184, 448], [4, 184, 448], [24, 184, 448],
+    [424, 184, -448], [436, 184, -448], [4, 24, 0], [216, 184, 0]]) {
+    game.run(`globalThis.effect = PlayerDeath.create({ x: ${x}, y: ${y}, dir: 2, mouth: 0.3 }).state;
+      effect.age = 30; deathDraws.length = 0;`);
+    const before = game.run('JSON.stringify({ effect, player, ghosts, maze })');
+    game.drawing.length = 0;
+    game.run(`GameRenderer.render(0, { maze, player: { ...player, alive: false }, ghosts: [],
+      powerTimer: 0, animFrame: 0, gameState: 'paused', playerDeath: effect });`);
+    assert.equal(game.run('deathDraws.length'), offset ? 2 : 1, `death at ${x},${y} loses its tunnel copy`);
+    if (offset) assert.ok(game.drawing.some(([method, dx, dy]) => method === 'translate' && dx === offset && dy === 0));
+    assert.equal(game.run('JSON.stringify({ effect, player, ghosts, maze })'), before);
+  }
+});

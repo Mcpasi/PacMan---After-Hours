@@ -83,6 +83,17 @@ test('reduced motion removes the expanding impulse and label movement, but still
   assert.deepEqual(first.find(([method]) => method === 'fillText'), last.find(([method]) => method === 'fillText'));
 });
 
+test('the rising life label stays below the top edge when a coin is collected on the first street', () => {
+  for (const tile of [12, 16, 24, 64]) {
+    for (const reducedMotion of [false, true]) for (const age of [0, 36, 54, 66]) {
+      const entity = { x: 8 * tile, y: 1.5 * tile, age, duration: 72 };
+      const calls = paint('drawEffect', entity, { tile, reducedMotion });
+      const baseline = entity.y + calls.find(([method]) => method === 'fillText')[3];
+      assert.ok(baseline >= tile * 0.55, `label crosses the top edge at tile=${tile}, age=${age}`);
+    }
+  }
+});
+
 test('the shared renderer places the coin before actors and the +1 LIFE effect above actors and atmosphere', () => {
   const game = boot({ reducedMotion: true });
   game.run(`globalThis.layers = [];

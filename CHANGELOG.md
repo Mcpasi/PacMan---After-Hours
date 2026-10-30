@@ -39,3 +39,11 @@
 **v.0.1.8**
 
 **Fix** fix: a bug in the ghost AI and in the learning logic fixed
+
+**v.0.1.9**
+
+**Fix** 
+
+Death animation at the edge of the tunnel: The opposite side was completely missing. 
+
+Tunnel copies now show the missing fragments: 0 → 154 pixels. '+1 LIFE' at the top edge: The ascending text was cut off. position limit now receives 423 instead of 219 pixels.

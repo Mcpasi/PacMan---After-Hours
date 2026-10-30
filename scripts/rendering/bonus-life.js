@@ -99,7 +99,8 @@ const BonusLifeArtwork = (() => {
     ctx.globalAlpha = Math.min(1, (1 - progress) * 4);
     ctx.font = `bold ${tile * 0.55}px monospace`; ctx.textAlign = 'center';
     ctx.lineWidth = tile * 0.12; ctx.lineJoin = 'round';
-    const y = -tile * (0.85 + (reducedMotion ? 0 : progress * 0.6));
+    // Keep the rising label, its outline and glow inside the top of the canvas.
+    const y = Math.max(tile * 0.7 - effect.y, -tile * (0.85 + (reducedMotion ? 0 : progress * 0.6)));
     ctx.strokeStyle = '#182026'; ctx.strokeText('+1 LIFE', 0, y);
     ctx.fillStyle = '#ffe0a0'; ctx.shadowColor = '#d69b45'; ctx.shadowBlur = tile * 0.15;
     ctx.fillText('+1 LIFE', 0, y);
