@@ -22,6 +22,7 @@ After all the years spent wandering through the dark and deserted labyrinth, the
 
 > [!NOTE]
 > **Pac-Man: After Hours is an independent project and is not affiliated with Bandai Namco.**
+> Let’s view *After Hours* as a prototype, as a simple experiment. For now, it’s nothing more than that.
 
   After Hours is an early version, intended to take place years after the original game, a "what-if" scenario.
 
