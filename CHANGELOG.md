@@ -44,6 +44,10 @@
 
 **Fix** 
 
-Death animation at the edge of the tunnel: The opposite side was completely missing. 
+- Death animation at the edge of the tunnel: The opposite side was completely missing. 
 
-Tunnel copies now show the missing fragments: 0 → 154 pixels. '+1 LIFE' at the top edge: The ascending text was cut off. position limit now receives 423 instead of 219 pixels.
+- Tunnel copies now show the missing fragments: 0 → 154 pixels. '+1 LIFE' at the top edge: The ascending text was cut off. position limit now receives 423 instead of 219 pixels.
+
+- Death effect: Modern brass fragments produced 330 pixels outside the arcade palette.  
+
+- Extra life effect: Gradients and smoothed fonts produced 1,295 of these pixels

@@ -21,6 +21,12 @@ const RetroWorldArtwork = (() => {
   const ghostFrames = ['0111001111001110', '0100111001110010'].map(feet => [...ghostBody, feet, feet]);
   const pellet = ['00111100', '01111110', '11111111', '11111111',
     '11111111', '11111111', '01111110', '00111100'];
+  const fadePattern = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const lifePlus = ['000', '010', '111', '010', '000'];
+  const lifeLetters = ['010,110,010,010,111', '', '100,100,100,100,111',
+    '111,010,010,010,111', '111,100,110,100,100', '111,100,110,100,111'];
+  const lifeRows = lifePlus.map((row, y) => row + '0' +
+    lifeLetters.map(letter => letter ? letter.split(',')[y] : '000').join('0'));
 
   function bitmap(ctx, rows, x = -8, y = -8, pixel = 1) {
     rows.forEach((row, r) => {
@@ -118,6 +124,61 @@ const RetroWorldArtwork = (() => {
     bitmap(ctx, rows); ctx.restore();
   }
 
+  function death(ctx, effect, { tile, reducedMotion = false }) {
+    if (!effect || effect.age >= effect.duration) return;
+    const progress = Math.max(0, effect.age / effect.duration);
+    const travel = reducedMotion ? 0.08 : 1 - Math.exp(-3 * progress);
+    const fall = reducedMotion ? 0 : progress * progress * 1.4;
+    const opacity = Math.min(1, (1 - progress) * 3);
+    const start = effect.fragments[0].start;
+    const mouth = (start - 0.2) / 0.6;
+    const rows = playerFrames[mouth > 0.35 ? 2 : mouth > 0.1 ? 1 : 0][0];
+    const heading = effect.dir * Math.PI / 2, cos = Math.cos(heading), sin = Math.sin(heading);
+    spriteContext(ctx, effect, tile);
+    ctx.fillStyle = '#ffff00';
+    rows.forEach((row, y) => [...row].forEach((cell, x) => {
+      if (cell !== '1' || fadePattern[(y % 4) * 4 + x % 4] >= opacity * 16) return;
+      const px = (x - 7.5) / size, py = (y - 7.5) / size;
+      const angle = (Math.atan2(py, px) + Math.PI * 2) % (Math.PI * 2);
+      const fragment = effect.fragments.find(piece => angle < piece.end) || effect.fragments.at(-1);
+      const spin = reducedMotion ? 0 : fragment.spin * progress;
+      const dx = px - fragment.cx, dy = py - fragment.cy;
+      const rx = fragment.cx + dx * Math.cos(spin) - dy * Math.sin(spin);
+      const ry = fragment.cy + dx * Math.sin(spin) + dy * Math.cos(spin);
+      ctx.fillRect(Math.round((rx * cos - ry * sin + fragment.vx * travel) * size - 0.5),
+        Math.round((rx * sin + ry * cos + fragment.vy * travel + fall) * size - 0.5), 1, 1);
+    }));
+    ctx.restore();
+  }
+
+  function lifeEffect(ctx, effect, { tile, reducedMotion = false }) {
+    if (!effect || effect.age >= effect.duration) return;
+    const progress = Math.max(0, effect.age / effect.duration);
+    const opacity = Math.min(1, (1 - progress) * 4);
+    spriteContext(ctx, effect, tile);
+    if (!reducedMotion && progress < 0.4) {
+      const radius = Math.round(size * (0.7 + progress * 3));
+      ctx.fillStyle = '#ffb852';
+      for (let y = -radius; y < radius; y++) for (let x = -radius; x < radius; x++) {
+        const distance = (x + 0.5) ** 2 + (y + 0.5) ** 2;
+        if (distance <= radius ** 2 && distance >= (radius - 1) ** 2) ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    const top = Math.max(2 - Math.round(effect.y / (tile / size)),
+      -Math.round(size * (0.85 + (reducedMotion ? 0 : progress * 0.6))) - 5);
+    const left = -Math.floor(lifeRows[0].length / 2);
+    // Pixel lettering and a fixed dither keep late fades inside the arcade palette.
+    for (const outline of [true, false]) {
+      ctx.fillStyle = outline ? '#000000' : '#ffff00';
+      lifeRows.forEach((row, y) => [...row].forEach((cell, x) => {
+        if (cell !== '1' || fadePattern[(y % 4) * 4 + x % 4] >= opacity * 16) return;
+        ctx.fillRect(left + x - (outline ? 1 : 0), top + y - (outline ? 1 : 0),
+          outline ? 3 : 1, outline ? 3 : 1);
+      }));
+    }
+    ctx.restore();
+  }
+
   function ghosts(ctx, roster, { tile, dirs, powerTimer = 0, time = 0, reducedMotion = false, frozen = false }) {
     for (const ghost of roster) {
       if (ghost.mode === 'house' && ghost.houseTimer > 30) continue;
@@ -146,7 +207,7 @@ const RetroWorldArtwork = (() => {
     }
   }
 
-  return { create, player, ghosts };
+  return { create, player, ghosts, death, lifeEffect };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = RetroWorldArtwork;

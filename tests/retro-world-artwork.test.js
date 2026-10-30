@@ -3,6 +3,7 @@ const test = require('node:test');
 const Artwork = require('../scripts/rendering/retro-world');
 const BonusArtwork = require('../scripts/rendering/bonus-life');
 const FreezeArtwork = require('../scripts/rendering/freeze-powerups');
+const PlayerDeath = require('../scripts/player-death');
 const { boot } = require('./helpers/game-harness');
 
 function recording() {
@@ -169,6 +170,34 @@ test('retro coin rotation has discrete frames and reduced motion keeps its pixel
   assert.deepEqual(coin(0, true), coin(20, true));
 });
 
+test('retro death starts with the exact live yellow sprite in every heading and mouth frame', () => {
+  for (const dir of [0, 1, 2, 3]) for (const mouth of [0, 0.3, 0.6]) {
+    const actor = { x: 120, y: 88, dir, mouth, alive: true };
+    const effect = PlayerDeath.create(actor).state;
+    assert.deepEqual(pixels(paint('death', effect), '#ffff00'),
+      pixels(paint('player', actor), '#ffff00'), `heading ${dir}, mouth ${mouth}`);
+  }
+});
+
+test('retro feedback stays on the pixel grid through motion, late fading and reduced motion', () => {
+  const death = PlayerDeath.create({ x: 120.4, y: 88.7, dir: 0, mouth: 0.3 }).state;
+  const life = { x: 120.4, y: 24, age: 0, duration: 72 };
+  for (const [method, effect] of [['death', death], ['lifeEffect', life]]) {
+    for (const reducedMotion of [false, true]) for (const tile of [12, 16, 64]) {
+      const frames = [0, 0.3, 0.9].map(progress => paint(method,
+        { ...effect, age: Math.floor(effect.duration * progress) }, { tile, reducedMotion }));
+      for (const calls of frames) {
+        assert.ok(pixels(calls).size > 0, `${method} must remain visible until expiry`);
+        assert.equal(calls.some(([name]) => /Gradient|arc|ellipse|rotate|stroke|Text/.test(name)), false);
+      }
+      if (reducedMotion) assert.deepEqual(frames[0], frames[1], 'early frames remain stationary');
+      else assert.notDeepEqual(frames[0], frames[1], 'regular animation still moves');
+    }
+    assert.deepEqual(paint(method, null), []);
+    assert.deepEqual(paint(method, { ...effect, age: effect.duration }), []);
+  }
+});
+
 test('pixelated display scaling is limited to the retro visit and resets when returning or restarting', () => {
   const game = boot(); game.click(); game.key('p');
   const canvas = game.elements.get('gameCanvas');
@@ -188,7 +217,7 @@ test('reduced motion freezes arcade feet and expiry flashes, while regular anima
     paint('ghosts', [ghost], { time: 0.3, powerTimer: 100 }));
 });
 
-test('the complete retro layer blends after atmosphere, but below death and bonus feedback', () => {
+test('the complete retro layer blends after atmosphere, including its death and bonus feedback', () => {
   const game = boot(); game.click();
   game.run(`globalThis.layers = [];
     const createRetro = RetroWorldArtwork.create;
@@ -204,12 +233,16 @@ test('the complete retro layer blends after atmosphere, but below death and bonu
     BonusLifeArtwork.drawCoin = () => layers.push('coin');
     PlayerDeathArtwork.draw = () => layers.push('death');
     BonusLifeArtwork.drawEffect = () => layers.push('bonus');
+    RetroWorldArtwork.death = () => layers.push('retroDeath');
+    RetroWorldArtwork.lifeEffect = () => layers.push('retroBonus');
     ctx.drawImage = () => layers.push(['image', ctx.globalAlpha]);
     GameRenderer.render(0, { maze, player, ghosts, animFrame, powerTimer, gameState: 'paused', retroWorld: { mix: 0.5 } });`);
   const layers = JSON.parse(game.run('JSON.stringify(layers)'));
   assert.ok(layers.indexOf('retroMaze') > layers.indexOf('modernGhosts'));
+  assert.ok(layers.indexOf('death') < layers.indexOf('retroMaze'));
+  assert.ok(layers.indexOf('bonus') < layers.indexOf('retroMaze'));
   assert.deepEqual(layers.slice(layers.indexOf('retroMaze')), [
-    'retroMaze', 'coin', 'retroPlayer', 'retroGhosts', ['image', 0.5], 'death', 'bonus'
+    'retroMaze', 'coin', 'retroPlayer', 'retroGhosts', 'retroDeath', 'retroBonus', ['image', 0.5]
   ]);
 });
 

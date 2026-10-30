@@ -855,6 +855,65 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     assert.equal(result.unchanged, true);
   });
 
+  for (const kind of ['death', 'extra life']) {
+    await t.test(`1980 ${kind} feedback keeps the opaque arcade palette`, async () => {
+      const result = await client.evaluate(`(() => {
+        startGame(); gameState = 'paused'; showOverlay('PAUSED');
+        retroWorld.trigger();
+        for (let tick = 0; tick < 570; tick++) retroWorld.update();
+        const state = { maze, player: { ...player, alive: false }, ghosts: [], animFrame: 0,
+          powerTimer: 0, gameState: 'paused', retroWorld: retroWorld.state };
+        const context = canvas.getContext('2d'), timestamp = performance.now();
+        GameRenderer.render(timestamp, state);
+        const before = canvas.toDataURL();
+        if (${JSON.stringify(kind)} === 'death') {
+          state.playerDeath = PlayerDeath.create(player).state;
+          state.playerDeath.age = 30;
+        } else {
+          state.bonusLife = { effect: { x: player.x, y: player.y, age: 10, duration: 72 } };
+        }
+        const allowed = new Set(['0,0,0', '33,33,255', '255,184,255', '255,184,174',
+          '255,255,0', '255,0,0', '255,255,255', '255,184,82', '0,255,255', '16,44,87']);
+        const foreign = new Set();
+        let invalid = 0, blendErrors = 0, maxBlendError = 0, visible = true;
+        const effect = state.playerDeath || state.bonusLife.effect;
+        for (const progress of [0, 0.3, 0.9]) {
+          effect.age = Math.floor(effect.duration * progress);
+          const frames = [0, 1, 0.5].map(mix => {
+            state.retroWorld.mix = mix;
+            GameRenderer.render(timestamp, state);
+            return context.getImageData(0, 0, canvas.width, canvas.height).data;
+          });
+          const [city, past, half] = frames;
+          for (let i = 0; i < past.length; i += 4) {
+            const color = past.slice(i, i + 3).join(',');
+            if (past[i + 3] !== 255 || !allowed.has(color)) { invalid++; foreign.add(color); }
+            const alpha = city[i + 3] + past[i + 3];
+            if (Math.abs(half[i + 3] - alpha / 2) > 2) blendErrors++;
+            for (let channel = 0; channel < 3; channel++) {
+              // The GPU city sits behind a partly transparent 2D canvas. Compare
+              // premultiplied colors to avoid amplifying getImageData rounding;
+              // allow three byte-rounding steps across readback and compositing.
+              const expected = (city[i + channel] * city[i + 3] + past[i + channel] * past[i + 3]) / 510;
+              const actual = half[i + channel] * half[i + 3] / 255;
+              const error = Math.abs(actual - expected);
+              maxBlendError = Math.max(maxBlendError, error);
+              if (error > 3) blendErrors++;
+            }
+          }
+          state.retroWorld.mix = 1; GameRenderer.render(timestamp, state);
+          visible &&= before !== canvas.toDataURL();
+        }
+        return { invalid, foreignColors: foreign.size, changed: visible, blendErrors, maxBlendError };
+      })()`);
+      assert.equal(result.changed, true, `${kind} feedback must remain visible`);
+      assert.equal(result.invalid, 0,
+        `${kind} introduced ${result.invalid} non-arcade pixels in ${result.foreignColors} colors`);
+      assert.equal(result.blendErrors, 0, `${kind} must crossfade with its complete world`);
+      t.diagnostic(`${kind}: ${result.invalid} foreign pixels; maximum blend rounding ${result.maxBlendError.toFixed(2)}/255`);
+    });
+  }
+
   const deathArtwork = await client.evaluate(`(() => {
     const surface = document.createElement('canvas'); surface.width = surface.height = 256;
     const ctx = surface.getContext('2d'), signatures = [], reduced = [];

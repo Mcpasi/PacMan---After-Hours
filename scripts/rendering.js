@@ -122,9 +122,20 @@ const GameRenderer = (() => {
     FreezePowerUpArtwork.drawPickups(retroContext, state.freezePowerUps, retroOptions);
     CherryBonusArtwork.draw(retroContext, state.cherryBonus?.fruit, retroOptions);
     drawActors(retroContext, state, retroOptions, RetroWorldArtwork);
+    drawFeedback(retroContext, state, retroOptions, RetroWorldArtwork);
     ctx.save(); ctx.globalAlpha = Math.min(1, mix);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(retroSurface, 0, 0); ctx.restore();
+  }
+
+  function drawFeedback(ctx, state, options, skin) {
+    skin.death(ctx, state.playerDeath, options);
+    if (state.playerDeath) {
+      // Flying fragments reach farther than an intact actor's one-tile margin.
+      drawTunnelCopy(ctx, tunnelOffset(state.playerDeath, state.maze, TILE * 3),
+        () => skin.death(ctx, state.playerDeath, options));
+    }
+    skin.lifeEffect(ctx, state.bonusLife?.effect, options);
   }
 
   function render(timestamp, state) {
@@ -147,15 +158,9 @@ const GameRenderer = (() => {
     FreezePowerUpArtwork.drawPickups(ctx, state.freezePowerUps, options);
     drawActors(ctx, state, options, actors);
     fallback.drawAtmosphere(ctx, frame);
+    drawFeedback(ctx, state, options, { death: PlayerDeathArtwork.draw, lifeEffect: BonusLifeArtwork.drawEffect });
     drawRetroWorld(ctx, state, options);
     FreezePowerUpArtwork.drawStatus(ctx, state.freezePowerUps, { ...options, width: layout.width });
-    PlayerDeathArtwork.draw(ctx, state.playerDeath, options);
-    if (state.playerDeath) {
-      // Flying fragments reach farther than an intact actor's one-tile margin.
-      drawTunnelCopy(ctx, tunnelOffset(state.playerDeath, state.maze, TILE * 3),
-        () => PlayerDeathArtwork.draw(ctx, state.playerDeath, options));
-    }
-    BonusLifeArtwork.drawEffect(ctx, state.bonusLife?.effect, options);
   }
 
   return { init, setMaze, setActors, setEnvironment, render };
