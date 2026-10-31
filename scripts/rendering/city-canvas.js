@@ -114,12 +114,12 @@ const CanvasCity = (() => {
       drawAtmosphere(ctx, frame) {
         ctx.save();
         const drift = frame.reducedMotion ? 0 : Math.sin(frame.time * 0.12) * layout.width * 0.12;
-        const mist = ctx.createLinearGradient(0, layout.height * 0.5, layout.width, layout.height);
+        const mist = ctx.createLinearGradient(drift, layout.height * 0.5, layout.width + drift, layout.height);
         mist.addColorStop(0, 'rgba(115, 151, 153, 0)');
         mist.addColorStop(0.5, 'rgba(115, 151, 153, 0.08)');
         mist.addColorStop(1, 'rgba(115, 151, 153, 0)');
         ctx.fillStyle = mist;
-        ctx.fillRect(drift, layout.height * 0.35, layout.width, layout.height * 0.65);
+        ctx.fillRect(0, layout.height * 0.35, layout.width, layout.height * 0.65);
         if (!frame.reducedMotion) {
           ctx.strokeStyle = 'rgba(153, 186, 196, 0.17)';
           ctx.lineWidth = 0.65;

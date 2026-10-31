@@ -51,3 +51,5 @@
 - Death effect: Modern brass fragments produced 330 pixels outside the arcade palette.  
 
 - Extra life effect: Gradients and smoothed fonts produced 1,295 of these pixels
+
+- During the fog drift, border strips up to 53.76 pixels wide appeared without fog. Now the gradient moves over a continuously covered drawing area.

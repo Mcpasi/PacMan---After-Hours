@@ -194,6 +194,27 @@ test('ambient time freezes on pause and respects reduced-motion preferences', ()
   }
 });
 
+test('drifting mist covers both street edges throughout its animation', () => {
+  const game = boot();
+  game.run(`globalThis.mistBounds = [];
+    const city = CanvasCity.create({ createCanvas: () => document.createElement('canvas') });
+    city.setLayout(CityLayout.create(maze, TILE));
+    ctx.fillRect = (x, y, width, height) => mistBounds.push({ left: x, right: x + width,
+      top: y, bottom: y + height });
+    for (const reducedMotion of [false, true]) {
+      for (const time of [0, Math.PI / 0.24, Math.PI * 3 / 0.24, Math.PI * 2 / 0.12]) {
+        city.drawAtmosphere(ctx, { time, reducedMotion });
+      }
+    }`);
+  const bounds = JSON.parse(game.run('JSON.stringify(mistBounds)'));
+  assert.equal(bounds.length, 8);
+  for (const area of bounds) {
+    assert.ok(area.left <= 0 && area.right >= 448,
+      `mist leaves an uncovered street edge: ${JSON.stringify(area)}`);
+    assert.ok(area.top <= 496 * 0.35 && area.bottom >= 496);
+  }
+});
+
 test('death fragments keep tunnel copies even when their flight exceeds the actor radius', () => {
   const game = boot({ reducedMotion: true });
   game.run(`globalThis.deathDraws = [];
