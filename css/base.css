@@ -1,5 +1,9 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
-:root { --screen-height: 100vh; }
+:root {
+  --screen-height: 100vh;
+  --safe-padding: max(5px, env(safe-area-inset-top)) max(5px, env(safe-area-inset-right))
+    max(5px, env(safe-area-inset-bottom)) max(5px, env(safe-area-inset-left));
+}
 @supports (height: 100svh) { :root { --screen-height: 100svh; } }
 @supports (height: 100dvh) { :root { --screen-height: 100dvh; } }
 body {
@@ -7,11 +11,7 @@ body {
   background-image: radial-gradient(ellipse at 50% 35%, #1b2a30 0, #080e15 58%, #03070b 100%);
   color: #d9dfda;
   font-family: 'Courier New', monospace;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  min-height: 100svh;
-  padding: 12px;
+  height: var(--screen-height);
+  padding: var(--safe-padding);
 }
 body.game-expanded { overflow: hidden; }

@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const CityLayout = require('../scripts/rendering/city-layout');
+const CityArchitecture = require('../scripts/rendering/city-architecture');
+const CityView = require('../scripts/rendering/city-view');
 const { boot } = require('./helpers/game-harness');
 
 test('city generation is deterministic and does not change the collision grid', () => {
@@ -29,6 +31,71 @@ test('building footprints cover all and only collision walls without overlaps', 
   maze.forEach((row, r) => row.forEach((cell, c) => assert.equal(coverage[r][c], cell === 0 ? 1 : 0, `${r},${c}`)));
 });
 
+test('city facades stay inside wall cells and the tilted board fits the canvas at every elevation', () => {
+  const game = boot();
+  const city = game.run('CityLayout.create(maze, TILE)');
+  const { width, height, tile, view } = city;
+  const [originX, originY] = CityView.project(view, 0, 0);
+  const [eastX, eastY] = CityView.project(view, tile, 0);
+  const [southX, southY] = CityView.project(view, 0, tile);
+  assert.ok(eastX - originX > eastY - originY && eastY > originY, 'east still reads as right');
+  assert.ok(southY - originY > originX - southX && southX < originX, 'south still reads as down');
+  const parts = CityArchitecture.platform(city);
+  for (const block of city.buildings) {
+    for (const part of CityArchitecture.building(block, tile)) {
+      assert.ok(part.x >= block.x && part.x + part.width <= block.x + block.width);
+      assert.ok(part.y >= block.y && part.y + part.depth <= block.y + block.depth);
+      parts.push(part);
+    }
+  }
+  for (const part of parts) {
+    assert.ok(part.width > 0 && part.depth > 0 && part.height > 0);
+    for (const x of [part.x, part.x + part.width]) {
+      for (const y of [part.y, part.y + part.depth]) {
+        for (const z of [part.z, part.z + part.height]) {
+          const [left, top] = CityView.project(view, x, y, z);
+          assert.ok(left > 0 && left < view.width && top > 0 && top < view.height);
+        }
+      }
+    }
+  }
+});
+
+test('viewport framing shows the whole desktop board and keeps the tracked player in the larger mobile view', () => {
+  const board = CityView.create({ width: 448, height: 496, tile: 16 });
+  const desktop = CityView.frame(board, 948, 792, { x: 216, y: 360 });
+  assert.equal(desktop.tracking, false);
+  assert.ok(desktop.scale * board.tile >= 27);
+  for (const [width, height] of [[378, 744], [698, 378], [310, 470], [420, 308]]) {
+    for (const x of [-4, 0, 24, 216, 424, 444]) {
+      const y = 184, view = CityView.frame(board, width, height, { x, y });
+      assert.equal(view.tracking, true);
+      assert.ok(view.scale * board.tile >= 26);
+      const actorX = (x + 448) % 448;
+      const [u, v] = CityView.project(view, actorX, y, view.spriteHeight);
+      assert.ok(u > 0 && u < width && v > 0 && v < height, `${width}x${height}, x=${x}`);
+      const floor = CityView.project(view, actorX, y);
+      const [worldX, worldY] = CityView.unproject(view, ...floor);
+      assert.ok(Math.hypot(worldX - actorX, worldY - y) < 1e-8);
+    }
+  }
+});
+
+test('resizing updates the sharp drawing surface and overview without changing the simulation', () => {
+  const game = boot();
+  const canvas = game.elements.get('gameCanvas'), overview = game.elements.get('mazeOverview');
+  const before = game.run('JSON.stringify({ maze, player, ghosts, level, score, lives })');
+  game.run('window.devicePixelRatio = 2;');
+  Object.assign(canvas, { clientWidth: 378, clientHeight: 744 });
+  game.advance();
+  assert.deepEqual([canvas.width, canvas.height], [567, 1116]);
+  assert.equal(overview.hidden, false);
+  Object.assign(canvas, { clientWidth: 948, clientHeight: 792 });
+  game.advance();
+  assert.equal(overview.hidden, true);
+  assert.equal(game.run('JSON.stringify({ maze, player, ghosts, level, score, lives })'), before);
+});
+
 test('lamps stay beside walkable streets, within bounds, and well separated', () => {
   const game = boot();
   const maze = JSON.parse(game.run('JSON.stringify(maze)'));
@@ -52,14 +119,20 @@ test('layout handles small, empty-street, and irregular-wall maps and rejects in
   }
 });
 
-test('without WebGL the cached Canvas city draws lights, atmosphere and unchanged actors', () => {
+test('without WebGL the Canvas city composites cached light pools, atmosphere and unchanged actors', () => {
   const game = boot();
   const before = game.run('JSON.stringify({ maze, player, ghosts })');
   game.drawing.length = 0;
   game.advance(3);
   assert.equal(game.elements.get('gameCanvas').dataset.renderer, 'canvas');
-  assert.ok(game.drawing.some(([method]) => method === 'drawImage'));
-  assert.ok(game.drawing.some(([method]) => method === 'createRadialGradient'));
+  const layout = game.run('CityLayout.create(maze, TILE)');
+  const poolDiameter = 4.5 * layout.tile;
+  const lightPools = game.drawing.filter(([method, , , , width, height]) =>
+    method === 'drawImage' && width === poolDiameter && height === poolDiameter);
+  assert.equal(lightPools.length, 3 * layout.lamps.length);
+  assert.ok(game.drawing.some(([method]) => method === 'createLinearGradient'));
+  assert.equal(game.drawing.some(([method]) => method === 'createRadialGradient'), false, 'light pools are cached');
+  assert.ok(game.drawing.some(([method, , b, c]) => method === 'transform' && b > 0 && c < 0));
   assert.ok(game.drawing.some(([method]) => method === 'translate'));
   assert.equal(game.drawing.filter(([method]) => method === 'fillText').length, 0, 'static rooftop/ground details are cached');
   assert.equal(game.run('JSON.stringify({ maze, player, ghosts })'), before);
@@ -131,12 +204,12 @@ test('consumed collectibles disappear without a stale static-dot layer', () => {
   const game = boot({ reducedMotion: true });
   game.drawing.length = 0;
   game.advance();
-  const dotCount = game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 1.8).length;
+  const dotCount = game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 2.2).length;
   assert.ok(dotCount > 100);
   game.run('maze[1][1] = 1;');
   game.drawing.length = 0;
   game.advance();
-  assert.equal(game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 1.8).length, dotCount - 1);
+  assert.equal(game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 2.2).length, dotCount - 1);
 });
 
 test('ghost-house barriers are drawn at their actual grid cells', () => {
@@ -144,7 +217,7 @@ test('ghost-house barriers are drawn at their actual grid cells', () => {
   game.drawing.length = 0;
   game.advance();
   assert.ok(game.drawing.some(([method, x, y, width, height]) =>
-    method === 'fillRect' && x === 13 * 16 && y === 9 * 16 + 16 * 0.4 && width === 16 && height === 2));
+    method === 'fillRect' && x === 13 * 16 && y === 9 * 16 + 6 && width === 16 && height === 2));
 });
 
 test('tunnel rendering adds translated actor copies without moving gameplay objects', () => {

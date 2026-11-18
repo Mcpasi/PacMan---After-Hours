@@ -1,15 +1,14 @@
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const fs = require('node:fs/promises');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { launchChromium } = require('./helpers/chromium');
 
 // Opt-in, dependency-free Chromium smoke test:
-// PACMAN_BROWSER=chromium PACMAN_TEST_THREE=1 node --test tests/browser.test.js
-// Both modes forbid external resources. Omit PACMAN_TEST_THREE to test the Canvas fallback.
+// sh tests/run.sh webgl or sh tests/run.sh canvas (both forbid external resources).
 const executable = process.env.PACMAN_BROWSER;
 const root = path.join(__dirname, '..');
 
@@ -65,7 +64,7 @@ async function waitFor(check, message, timeout = 20000) {
 }
 
 test('browser smoke: city, actors, death fragments, search, movement, pause, mobile layout and offline fallback', {
-  skip: !executable && 'Set PACMAN_BROWSER to a Chromium executable.', timeout: 90000
+  skip: !executable && 'Run sh tests/run.sh canvas or webgl.', timeout: 180000
 }, async t => {
   let browser, client, profile;
   const server = http.createServer(async (request, response) => {
@@ -111,7 +110,7 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   const testThree = process.env.PACMAN_TEST_THREE === '1';
   const gpuArgs = process.env.PACMAN_BROWSER_ARGS ? JSON.parse(process.env.PACMAN_BROWSER_ARGS) :
     testThree ? ['--enable-unsafe-swiftshader', '--use-angle=swiftshader-webgl', '--ignore-gpu-blocklist'] : ['--disable-gpu', '--disable-software-rasterizer'];
-  browser = spawn(executable, ['--headless', '--no-sandbox', '--disable-dev-shm-usage',
+  browser = launchChromium(executable, ['--headless', '--no-sandbox', '--disable-dev-shm-usage',
     ...gpuArgs,
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank']);
   let stderr = '', startupError;
@@ -146,7 +145,8 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     t.diagnostic('Local Three.js city rendered with external resources blocked.');
   }
 
-  async function checkLayout(minWidth) {
+  async function checkLayout(minWidth, minHeight, tracking) {
+    await client.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const layout = await client.evaluate(`(() => {
       const viewport = document.getElementById('gameViewport').getBoundingClientRect();
       const surface = document.getElementById('gameCanvas').getBoundingClientRect();
@@ -154,47 +154,96 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       const button = document.getElementById('startBtn') || document.getElementById('ovBtn');
       const action = button.getBoundingClientRect();
       const fullscreen = document.getElementById('fullscreenBtn').getBoundingClientRect();
+      const view = GameRenderer.getView();
+      const board = CityView.create({ width: COLS * TILE, height: ROWS * TILE, tile: TILE });
+      const overview = document.getElementById('mazeOverview');
       return { width: viewport.width, height: viewport.height,
         fits: viewport.left >= 0 && viewport.top >= 0 && viewport.right <= innerWidth + 1 && viewport.bottom <= innerHeight + 1 &&
           document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight,
-        ratio: surface.width / surface.height, logicalSize: [canvas.width, canvas.height],
-        layersAligned: !scene || (Math.abs(scene.width - surface.width) < 1 && Math.abs(scene.height - surface.height) < 1),
+        logicalSize: [COLS * TILE, ROWS * TILE],
+        pixelsAligned: Math.abs(canvas.width / canvas.height - surface.width / surface.height) < 0.005,
+        tileSize: view.scale * TILE, tracking: view.tracking, overview: !overview.hidden,
+        boardFits: view.left >= 0 && view.top >= 0 && view.left + board.width * view.scale <= view.width + 0.1 &&
+          view.top + board.height * view.scale <= view.height + 0.1,
+        layersAligned: !scene || (Math.abs(scene.left - surface.left - view.left) < 1 &&
+          Math.abs(scene.top - surface.top - view.top) < 1 && Math.abs(scene.width - board.width * view.scale) < 1 &&
+          Math.abs(scene.height - board.height * view.scale) < 1),
         actionFits: action.left >= viewport.left && action.right <= viewport.right && action.top >= viewport.top && action.bottom <= viewport.bottom,
         controlFits: fullscreen.width >= 44 && fullscreen.height >= 44 && fullscreen.left >= 0 && fullscreen.right <= innerWidth &&
           fullscreen.top >= 0 && fullscreen.bottom <= innerHeight };
     })()`);
-    assert.ok(layout.width >= minWidth, `mobile map must use available space: ${JSON.stringify(layout)}`);
-    assert.equal(layout.fits, true, 'the complete map must fit without page scrolling');
-    assert.ok(Math.abs(layout.ratio - 28 / 31) < 0.001, 'the map must not be stretched');
+    assert.ok(layout.width >= minWidth && layout.height >= minHeight,
+      `play area must fill the viewport: ${JSON.stringify(layout)}`);
+    assert.equal(layout.fits, true, 'the game must fit without page scrolling');
+    assert.equal(layout.pixelsAligned, true, 'the play surface must keep its pixel proportions');
     assert.deepEqual(layout.logicalSize, [448, 496], 'resizing must not change gameplay coordinates');
     assert.equal(layout.layersAligned, true, 'WebGL scenery and Canvas actors must remain aligned');
+    assert.ok(layout.tileSize >= (tracking ? 26 : 27), 'street tiles must stay large enough to read');
+    assert.equal(layout.tracking, tracking);
+    assert.equal(layout.overview, tracking);
+    if (!tracking) assert.equal(layout.boardFits, true, 'desktop can show the complete city');
     assert.equal(layout.actionFits, true, 'the overlay action must stay inside the map');
     assert.equal(layout.controlFits, true, 'fullscreen must be reachable with a 44px touch target');
     return layout;
   }
+
+  await checkLayout(940, 770, false);
+
+  await t.test('lights are collected at projected street centers and the HUD stays level', async () => {
+    const samples = await client.evaluate(`(() => {
+      const ctx = canvas.getContext('2d'), timestamp = performance.now();
+      const state = { maze, player: { ...player, alive: false }, ghosts: [],
+        powerTimer: 0, animFrame: 0, gameState: 'paused' };
+      GameRenderer.render(timestamp, state);
+      const view = GameRenderer.getView();
+      return [[1, 1], [25, 29]].map(([col, row]) => {
+        const value = maze[row][col];
+        if (value !== 2) throw new Error('Test needs a dot at ' + col + ',' + row);
+        const x = (col + 0.5) * TILE, y = (row + 0.5) * TILE;
+        const [left, top] = CityView.project(view, x, y);
+        const pixel = () => Array.from(ctx.getImageData(Math.floor(left), Math.floor(top), 1, 1).data);
+        try {
+          GameRenderer.render(timestamp, state);
+          const before = pixel();
+          maze[row][col] = 1;
+          GameRenderer.render(timestamp, state);
+          const after = pixel();
+          return { before, after, distance: Math.hypot(left - x, top - y), identity: ctx.getTransform().isIdentity };
+        } finally {
+          maze[row][col] = value;
+        }
+      });
+    })()`);
+    for (const sample of samples) {
+      assert.ok(sample.distance > 12, 'pellet centers move with the tilted board');
+      assert.notDeepEqual(sample.before, sample.after, 'eating removes the light from the projected street');
+      assert.equal(sample.identity, true, 'city projection must be restored before the HUD or retro scene draws');
+    }
+  });
 
   await t.test('tunnel actors remain visible on both sides of the horizontal seam', async () => {
     const samples = await client.evaluate(`(() => {
       const ctx = canvas.getContext('2d'), timestamp = performance.now();
       const state = { maze, player: { ...player, alive: false }, ghosts: [],
         powerTimer: 0, animFrame: 0, gameState: 'paused' };
+      const { width, tunnels } = CityLayout.create(maze, TILE);
+      GameRenderer.render(timestamp, state);
+      const view = GameRenderer.getView();
+      const y = (tunnels[0] + 0.5) * TILE;
+      const mouths = [0, width].map(edge => CityView.project(view, edge, y, view.spriteHeight));
+      const pixels = () => mouths.map(([left, top]) =>
+        ctx.getImageData(Math.floor(left) - TILE, Math.floor(top) - TILE, TILE * 2, TILE * 2).data);
       const results = [];
       for (const x of [-4, 4]) {
         for (const kind of ['player', 'ghost', 'eyes']) {
           GameRenderer.render(timestamp, state);
-          const before = ctx.getImageData(0, 176, canvas.width, 16).data;
-          const actor = { ...player, x, y: 184, alive: true, dir: 2, mouth: 0.3 };
+          const before = pixels();
+          const actor = { ...player, x, y, alive: true, dir: 2, mouth: 0.3 };
           const visible = kind === 'player' ? { ...state, player: actor } : { ...state,
-            ghosts: [{ ...ghosts[0], x, y: 184, dir: 2, mode: kind === 'eyes' ? 'eyes' : 'chase', scared: false }] };
+            ghosts: [{ ...ghosts[0], x, y, dir: 2, mode: kind === 'eyes' ? 'eyes' : 'chase', scared: false }] };
           GameRenderer.render(timestamp, visible);
-          const after = ctx.getImageData(0, 176, canvas.width, 16).data;
-          let left = 0, right = 0;
-          for (let y = 0; y < 16; y++) for (let col = 0; col < canvas.width; col++) {
-            const i = (y * canvas.width + col) * 4;
-            if (!after.slice(i, i + 4).some((value, channel) => value !== before[i + channel])) continue;
-            if (col < 16) left++;
-            if (col >= canvas.width - 16) right++;
-          }
+          const [left, right] = pixels().map((after, side) =>
+            after.reduce((count, value, index) => count + Number(value !== before[side][index]), 0));
           results.push({ kind, x, left, right });
         }
       }
@@ -211,36 +260,39 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       const context = canvas.getContext('2d'), timestamp = performance.now();
       const state = { maze, player: { ...player, alive: false }, ghosts: [],
         powerTimer: 0, animFrame: 0, gameState: 'paused' };
+      const { width, height, tunnels } = CityLayout.create(maze, TILE);
+      GameRenderer.render(timestamp, state);
+      const view = GameRenderer.getView();
+      const y = (tunnels[0] + 0.5) * TILE;
+      const pixels = () => context.getImageData(0, 0, canvas.width, canvas.height).data;
       const results = [];
       for (const [x, age] of [[-4, 0], [4, 0], [436, 0], [24, 30], [424, 30]]) {
         GameRenderer.render(timestamp, state);
-        const before = context.getImageData(0, 144, canvas.width, 80).data;
-        const effect = PlayerDeath.create({ x, y: 184, dir: 2, mouth: 0.3 }).state;
+        const before = pixels();
+        const effect = PlayerDeath.create({ x, y, dir: 2, mouth: 0.3 }).state;
         effect.age = age;
-        // Rasterize the complete wrapped effect as the oracle. Some pieces have
-        // not crossed the seam yet, so both sides need not contain pixels.
-        for (const offset of [0, canvas.width, -canvas.width]) {
+        // Paint all copies against the projected seam as a reference image.
+        context.save();
+        context.scale(canvas.width / view.width, canvas.height / view.height);
+        CityView.transform(context, view, view.spriteHeight);
+        context.beginPath(); context.rect(0, -TILE * 3, width, height + TILE * 6); context.clip();
+        for (const offset of [0, width, -width]) {
           context.save(); context.translate(offset, 0);
           PlayerDeathArtwork.draw(context, effect, { tile: TILE }); context.restore();
         }
-        const expected = context.getImageData(0, 144, canvas.width, 80).data;
+        context.restore();
+        const expected = pixels();
         GameRenderer.render(timestamp, { ...state, playerDeath: effect });
-        const after = context.getImageData(0, 144, canvas.width, 80).data;
-        let left = 0, right = 0, mismatches = 0;
-        for (let row = 0; row < 80; row++) for (let col = 0; col < canvas.width; col++) {
-          const i = (row * canvas.width + col) * 4;
-          if (after.slice(i, i + 4).some((value, channel) => value !== expected[i + channel])) mismatches++;
-          if (!after.slice(i, i + 4).some((value, channel) => value !== before[i + channel])) continue;
-          if (col < 48) left++;
-          if (col >= canvas.width - 48) right++;
-        }
-        results.push({ x, age, left, right, mismatches });
+        const after = pixels();
+        const visible = after.some((value, index) => value !== before[index]);
+        const matches = after.every((value, index) => value === expected[index]);
+        results.push({ x, age, visible, matches });
       }
       return results;
     })()`);
     t.diagnostic(JSON.stringify(samples));
     for (const sample of samples) {
-      assert.equal(sample.mismatches, 0, `death fragments clipped: ${JSON.stringify(sample)}`);
+      assert.ok(sample.visible && sample.matches, `death fragments clipped: ${JSON.stringify(sample)}`);
     }
   });
 
@@ -301,17 +353,70 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   await client.evaluate(`for (const key of ['requestFullscreen', 'webkitRequestFullscreen']) {
     Object.defineProperty(document.getElementById('gameContainer'), key, { value: undefined, configurable: true });
   }`);
-  for (const [width, height, minWidth] of [[390, 844, 370], [844, 390, 330], [320, 568, 300], [568, 320, 270]]) {
+  const mobileSizes = [[390, 844, 374, 733], [844, 390, 690, 376], [320, 568, 305, 460], [568, 320, 417, 306]];
+  for (const [width, height, minWidth, minHeight] of mobileSizes) {
     await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: true });
-    const layout = await checkLayout(minWidth);
+    const layout = await checkLayout(minWidth, minHeight, true);
     await client.evaluate("document.getElementById('fullscreenBtn').click()");
     assert.equal(await client.evaluate("document.getElementById('fullscreenBtn').getAttribute('aria-pressed')"), 'true');
-    await checkLayout(minWidth);
+    await checkLayout(minWidth, minHeight, true);
     assert.equal(await client.evaluate('gameState'), 'title', 'fullscreen must not start or reset the game');
     await client.evaluate("document.getElementById('fullscreenBtn').click()");
     assert.equal(await client.evaluate("document.getElementById('gameContainer').classList.contains('is-expanded')"), false);
-    t.diagnostic(`Mobile ${width}x${height}: full map ${Math.round(layout.width)}x${Math.round(layout.height)}.`);
+    t.diagnostic(`Mobile ${width}x${height} uses a ${Math.round(layout.width)}x${Math.round(layout.height)} play area and ${layout.tileSize}px tiles.`);
   }
+
+  await t.test('players, ghosts and pickups render at playable sizes in both phone orientations', async () => {
+    for (const [width, height] of mobileSizes.slice(0, 2)) {
+      await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+      const sizes = await client.evaluate(`(() => {
+        const context = canvas.getContext('2d'), timestamp = performance.now();
+        const state = { maze, player: { ...player, alive: false }, ghosts: [],
+          animFrame: 0, powerTimer: 0, gameState: 'paused' };
+        GameRenderer.render(timestamp, state);
+        const view = GameRenderer.getView();
+        const [x, y] = CityView.project(view, player.x, player.y, view.spriteHeight).map(Math.floor);
+        const size = 60;
+        const pixels = () => context.getImageData(x - size / 2, y - size / 2, size, size).data;
+        const before = pixels();
+        const bounds = () => {
+          const image = pixels();
+          let left = size, right = -1, top = size, bottom = -1;
+          for (let index = 0; index < size * size; index++) {
+            const offset = index * 4;
+            const difference = [0, 1, 2, 3].some(channel => Math.abs(image[offset + channel] - before[offset + channel]) > 16);
+            if (!difference) continue;
+            left = Math.min(left, index % size); right = Math.max(right, index % size);
+            top = Math.min(top, Math.floor(index / size)); bottom = Math.max(bottom, Math.floor(index / size));
+          }
+          return [right - left + 1, bottom - top + 1];
+        };
+        const position = { x: player.x, y: player.y };
+        const probes = [
+          ['player', { player: { ...player, mouth: 0.2, alive: true } }],
+          ['ghost', { ghosts: [{ ...ghosts[0], ...position, mode: 'chase' }] }],
+          ['coin', { bonusLife: { coin: position } }],
+          ['power-up', { freezePowerUps: { pickups: [{ ...position, kind: 'lantern' }], remainingTicks: 0 } }]
+        ];
+        const sizes = probes.map(([label, changes]) => {
+          GameRenderer.render(timestamp, { ...state, ...changes });
+          return { label, bounds: bounds() };
+        });
+        const camera = JSON.stringify(view.ground);
+        const trackingDuringFade = [0.5, 1].every(mix => {
+          GameRenderer.render(timestamp, { ...state, retroWorld: { mix } });
+          return GameRenderer.getView().tracking && JSON.stringify(GameRenderer.getView().ground) === camera;
+        });
+        return { sizes, trackingDuringFade };
+      })()`);
+      assert.equal(sizes.trackingDuringFade, true, 'the phone camera must stay on the same streets during the transition');
+      for (const { label, bounds } of sizes.sizes) {
+        const minimum = label === 'player' || label === 'ghost' ? 18 : 13;
+        assert.ok(bounds[0] >= minimum && bounds[1] >= minimum - 2, `${width}x${height} ${label}: ${bounds}`);
+      }
+    }
+  });
+
   await client.evaluate("document.getElementById('fullscreenBtn').focus()");
   for (const [key, code, keyCode, expanded] of [['Enter', 'Enter', 13, true], [' ', 'Space', 32, false]]) {
     await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, text: key === 'Enter' ? '\r' : ' ' });
@@ -371,7 +476,7 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   const beforeFullscreen = await client.evaluate('JSON.stringify({ gameState, player, ghosts, maze, score, lives, level })');
   await client.evaluate("document.getElementById('fullscreenBtn').click()", true);
   await waitFor(() => client.evaluate("document.fullscreenElement === document.getElementById('gameContainer')"), 'Native fullscreen did not activate.');
-  await checkLayout(680);
+  await checkLayout(920, 750, false);
   await client.evaluate('document.exitFullscreen()');
   await waitFor(() => client.evaluate("!document.getElementById('gameContainer').classList.contains('is-expanded')"), 'External fullscreen exit did not restore the layout.');
   assert.equal(await client.evaluate('JSON.stringify({ gameState, player, ghosts, maze, score, lives, level })'), beforeFullscreen);
@@ -751,19 +856,24 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   await client.evaluate(`level256Glitch.state.effect = null;`);
   t.diagnostic('Level-256-inspired fragments, right-edge bounds, cleanup, Canvas isolation, live lamp dimming and reduced-motion changes verified.');
 
-  await t.test('1980 time travel blends the whole scene, keeps live pellets and restores the clock and city', async () => {
+  const pixelPalette = `new Set([...RetroCityArtwork.colors, '#000000', '#2121ff', '#ffb8ff', '#ffb8ae',
+    '#ffff00', '#ff0000', '#ffffff', '#ffb852', '#00ffff', '#102c57', '#fff4ad']
+    .map(color => parseInt(color.slice(1), 16)))`;
+
+  await t.test('1980 time travel keeps the same camera while the streets, rooftops and actors crossfade', async () => {
     const visit = await client.evaluate(`(() => {
       startGame(); gameState = 'paused'; showOverlay('PAUSED');
       const context = canvas.getContext('2d'), timestamp = performance.now();
       const before = JSON.stringify({ maze, player, ghosts, score, lives, powerTimer, bonus: bonusLife.state });
       const state = { maze, player, ghosts, animFrame, powerTimer, gameState: 'paused',
         bonusLife: bonusLife.state, retroWorld: retroWorld.state };
-      const years = [], phases = [], mixes = [];
+      const years = [], phases = [], mixes = [], cameras = [];
       function render() {
         updateWorldClock();
         GameRenderer.render(timestamp, state);
         years.push(document.getElementById('worldClock').textContent);
         phases.push(retroWorld.state.phase); mixes.push(retroWorld.state.mix);
+        cameras.push(JSON.stringify(GameRenderer.getView().ground));
         return canvas.toDataURL();
       }
       function advance(ticks) { for (let tick = 0; tick < ticks; tick++) retroWorld.update(); }
@@ -773,17 +883,24 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       advance(90); render();
       advance(240); const halfway = render();
       advance(240); const past = render();
-      const floor = [...context.getImageData(216, 424, 1, 1).data];
-      const playerBody = [...context.getImageData(player.x - 4, player.y, 1, 1).data];
+      const view = GameRenderer.getView();
+      const pixelAt = (x, y, z = 0) => {
+        const [u, v] = CityView.project(view, x, y, z).map(Math.floor);
+        return Array.from(context.getImageData(u, v, 1, 1).data);
+      };
+      const sky = Array.from(context.getImageData(0, 0, 1, 1).data);
+      const playerBody = pixelAt(player.x - 4, player.y, view.spriteHeight);
+      const lit = pixelAt(24, 24);
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-      let blue = 0;
+      const roofs = new Set([0x2b3d66, 0x30586d, 0x453d6a]);
+      let roofPixels = 0;
       for (let index = 0; index < pixels.length; index += 4) {
-        if (pixels[index + 2] > 180 && pixels[index] < 70 && pixels[index + 1] < 70) blue++;
+        if (roofs.has((pixels[index] << 16) | (pixels[index + 1] << 8) | pixels[index + 2])) roofPixels++;
       }
       const preview = ${process.env.PACMAN_RETRO_SCREENSHOT ? 'past' : 'null'};
       // Pellets are not baked into the cached 1980 background.
       const cell = maze[1][1]; maze[1][1] = 1; render();
-      const consumed = [...context.getImageData(24, 24, 1, 1).data];
+      const consumed = pixelAt(24, 24);
       maze[1][1] = cell;
       // Remove the extra probe from the timeline assertions.
       years.pop(); phases.pop(); mixes.pop();
@@ -793,7 +910,8 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       if (JSON.stringify({ maze, player, ghosts, score, lives, powerTimer, bonus: bonusLife.state }) !== before) {
         throw new Error('Time travel changed gameplay');
       }
-      return { years, phases, mixes, floor, playerBody, blue, consumed, preview,
+      return { years, phases, mixes, sky, playerBody, roofPixels, consumed, lit, preview,
+        sameCamera: new Set(cameras).size === 1,
         distinct: new Set([present, halfway, past, returning]).size,
         restored: present === restored, sameHalfway: halfway === returning };
     })()`);
@@ -803,16 +921,18 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     assert.deepEqual(visit.phases, ['idle', 'fadeIn', 'fadeIn', 'hold', 'fadeOut', 'fadeOut', 'idle']);
     assert.deepEqual(visit.mixes, [0, 0, 0.5, 1, 1, 0.5, 0]);
     assert.deepEqual(visit.years, ['03:17 AM', '03:17 AM', '1980', '1980', '1980', '1980', '03:17 AM']);
-    assert.deepEqual(visit.floor, [0, 0, 0, 255], 'the opaque black world must completely cover Canvas or GPU scenery');
-    assert.deepEqual(visit.playerBody, [255, 255, 0, 255], 'the brass player becomes original arcade yellow');
-    assert.ok(visit.blue > 1000, `the blue double maze contours must be visible (${visit.blue} blue pixels)`);
-    assert.deepEqual(visit.consumed, [0, 0, 0, 255], 'consumed pellets must disappear in the 1980 world');
+    assert.deepEqual(visit.sky, [9, 13, 34, 255], 'the pixel world covers the whole viewport');
+    assert.deepEqual(visit.playerBody, [255, 255, 0, 255], 'the arcade player occupies the same projected street position');
+    assert.ok(visit.roofPixels > 1000, `the pixel city must have visible rooftop faces (${visit.roofPixels} pixels)`);
+    assert.deepEqual(visit.lit, [255, 184, 174, 255], 'the pixel pellet occupies its modern street position');
+    assert.notDeepEqual(visit.consumed, visit.lit, 'consumed pellets must disappear in the 1980 world');
+    assert.equal(visit.sameCamera, true, 'the world transition must keep the camera fixed');
     assert.equal(visit.distinct, 3);
     assert.equal(visit.sameHalfway, true, 'both transitions use the same complete-scene blend');
     assert.equal(visit.restored, true, 'the present-day scene returns without stale retro pixels');
   });
 
-  await t.test('the 8-bit world has only hard palette pixels and uses sharp scaling only during its visit', async () => {
+  await t.test('the angled 8-bit world uses a hard palette and preserves both tunnel copies', async () => {
     const result = await client.evaluate(`(() => {
       const context = canvas.getContext('2d'), timestamp = performance.now();
       const before = JSON.stringify({ maze, player, ghosts, score, lives, bonus: bonusLife.state });
@@ -825,32 +945,34 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
       context.imageSmoothingEnabled = true;
       GameRenderer.render(timestamp, state);
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-      const allowed = new Set(['0,0,0', '33,33,255', '255,184,255', '255,184,174',
-        '255,255,0', '255,0,0', '255,255,255', '255,184,82', '0,255,255', '16,44,87']);
+      const allowed = ${pixelPalette};
+      const view = GameRenderer.getView();
+      const ends = [0, COLS * TILE].map(x => CityView.project(view, x, 184, view.spriteHeight));
       const colors = new Set();
       let invalid = 0, left = 0, right = 0;
       for (let i = 0; i < pixels.length; i += 4) {
-        const color = pixels.slice(i, i + 3).join(','); colors.add(color);
+        const color = (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2];
+        colors.add(color);
         if (pixels[i + 3] !== 255 || !allowed.has(color)) invalid++;
         const x = (i / 4) % canvas.width, y = Math.floor(i / 4 / canvas.width);
-        if (color === '255,255,0' && y >= 176 && y < 192) {
-          if (x < 16) left++;
-          if (x >= canvas.width - 16) right++;
+        if (color === 0xffff00) {
+          if (Math.hypot(x - ends[0][0], y - ends[0][1]) < 24) left++;
+          if (Math.hypot(x - ends[1][0], y - ends[1][1]) < 24) right++;
         }
       }
       const scaling = [];
       for (const mix of [1, 0.5, 0]) {
         state.retroWorld.mix = mix; GameRenderer.render(timestamp, state);
-        scaling.push([canvas.dataset.world, getComputedStyle(canvas).imageRendering]);
+        scaling.push(canvas.dataset.world);
       }
       return { invalid, colors: colors.size, left, right, scaling,
         smoothingRestored: context.imageSmoothingEnabled,
         unchanged: JSON.stringify({ maze, player, ghosts, score, lives, bonus: bonusLife.state }) === before };
     })()`);
     assert.equal(result.invalid, 0, 'no antialiased colors, gradients or translucent sprite edges may enter the retro scene');
-    assert.ok(result.colors >= 8, 'maze, sprites, coin and freeze finds must all contribute their arcade colors');
+    assert.ok(result.colors >= 20, 'facades, streets, sprites and pickups contribute solid arcade colors');
     assert.ok(result.left > 0 && result.right > 0, 'snapped pixel sprites must remain visible on both tunnel edges');
-    assert.deepEqual(result.scaling, [['retro', 'pixelated'], ['retro', 'pixelated'], ['city', 'auto']]);
+    assert.deepEqual(result.scaling, ['retro', 'retro', 'city']);
     assert.equal(result.smoothingRestored, true, 'the pixel layer must not change modern Canvas smoothing');
     assert.equal(result.unchanged, true);
   });
@@ -865,15 +987,17 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
           powerTimer: 0, gameState: 'paused', retroWorld: retroWorld.state };
         const context = canvas.getContext('2d'), timestamp = performance.now();
         GameRenderer.render(timestamp, state);
-        const before = canvas.toDataURL();
+        const view = GameRenderer.getView();
+        const [x, y] = CityView.project(view, player.x, player.y, view.spriteHeight).map(Math.floor);
+        const pixels = () => context.getImageData(x - 60, y - 60, 120, 120).data;
+        const before = pixels();
         if (${JSON.stringify(kind)} === 'death') {
           state.playerDeath = PlayerDeath.create(player).state;
           state.playerDeath.age = 30;
         } else {
           state.bonusLife = { effect: { x: player.x, y: player.y, age: 10, duration: 72 } };
         }
-        const allowed = new Set(['0,0,0', '33,33,255', '255,184,255', '255,184,174',
-          '255,255,0', '255,0,0', '255,255,255', '255,184,82', '0,255,255', '16,44,87']);
+        const allowed = ${pixelPalette};
         const foreign = new Set();
         let invalid = 0, blendErrors = 0, maxBlendError = 0, visible = true;
         const effect = state.playerDeath || state.bonusLife.effect;
@@ -882,11 +1006,11 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
           const frames = [0, 1, 0.5].map(mix => {
             state.retroWorld.mix = mix;
             GameRenderer.render(timestamp, state);
-            return context.getImageData(0, 0, canvas.width, canvas.height).data;
+            return pixels();
           });
           const [city, past, half] = frames;
           for (let i = 0; i < past.length; i += 4) {
-            const color = past.slice(i, i + 3).join(',');
+            const color = (past[i] << 16) | (past[i + 1] << 8) | past[i + 2];
             if (past[i + 3] !== 255 || !allowed.has(color)) { invalid++; foreign.add(color); }
             const alpha = city[i + 3] + past[i + 3];
             if (Math.abs(half[i + 3] - alpha / 2) > 2) blendErrors++;
@@ -901,15 +1025,14 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
               if (error > 3) blendErrors++;
             }
           }
-          state.retroWorld.mix = 1; GameRenderer.render(timestamp, state);
-          visible &&= before !== canvas.toDataURL();
+          visible &&= past.some((value, index) => value !== before[index]);
         }
         return { invalid, foreignColors: foreign.size, changed: visible, blendErrors, maxBlendError };
       })()`);
       assert.equal(result.changed, true, `${kind} feedback must remain visible`);
       assert.equal(result.invalid, 0,
         `${kind} introduced ${result.invalid} non-arcade pixels in ${result.foreignColors} colors`);
-      assert.equal(result.blendErrors, 0, `${kind} must crossfade with its complete world`);
+      assert.equal(result.blendErrors, 0, `${kind} must crossfade with its complete world, max error ${result.maxBlendError}`);
       t.diagnostic(`${kind}: ${result.invalid} foreign pixels; maximum blend rounding ${result.maxBlendError.toFixed(2)}/255`);
     });
   }
@@ -974,6 +1097,30 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   if (testThree) {
     await client.evaluate('resetLevel(false); resetLevel(false);');
     assert.equal(await client.evaluate("document.querySelectorAll('.city-scene').length"), 1, 'restarts must not leak canvases');
+  }
+  for (const [width, height, minWidth, minHeight] of mobileSizes.slice(0, 2)) {
+    await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+    await checkLayout(minWidth, minHeight, true);
+  }
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
+  await client.evaluate('gameState = "playing"; showOverlay(null);');
+  const screenshots = [
+    [process.env.PACMAN_SCREENSHOT, 960, 900, false, 0],
+    [process.env.PACMAN_MOBILE_SCREENSHOT, 390, 844, true, 0],
+    [process.env.PACMAN_LANDSCAPE_SCREENSHOT, 844, 390, true, 0],
+    [process.env.PACMAN_MOBILE_RETRO_SCREENSHOT, 390, 844, true, 1]
+  ].filter(([file]) => file);
+  if (screenshots.length) {
+    await client.evaluate("startGame(); gameState = 'paused'; showOverlay(null);");
+    for (const [file, width, height, mobile, mix] of screenshots) {
+      await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
+      await client.evaluate(`retroWorld.state.mix = ${mix};
+        new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`);
+      const screenshot = await client.send('Page.captureScreenshot', { format: 'png' });
+      await fs.writeFile(file, Buffer.from(screenshot.data, 'base64'));
+    }
+  }
+  if (testThree) {
     await client.evaluate(`(() => {
       const canvas = document.querySelector('.city-scene');
       const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -981,17 +1128,6 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     })()`);
     await waitFor(() => client.evaluate("document.getElementById('gameCanvas').dataset.renderer === 'canvas'"), 'Context loss did not activate Canvas.');
     assert.equal(await client.evaluate("document.querySelectorAll('.city-scene').length"), 0);
-  }
-
-  for (const [width, height, minWidth] of [[390, 844, 370], [844, 390, 330]]) {
-    await client.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
-    await checkLayout(minWidth);
-  }
-  await client.send('Emulation.setDeviceMetricsOverride', { width: 960, height: 900, deviceScaleFactor: 1, mobile: false });
-  await client.evaluate('gameState = "playing"; showOverlay(null);');
-  if (process.env.PACMAN_SCREENSHOT) {
-    const screenshot = await client.send('Page.captureScreenshot', { format: 'png' });
-    await fs.writeFile(process.env.PACMAN_SCREENSHOT, Buffer.from(screenshot.data, 'base64'));
   }
   await client.send('Page.reload', { ignoreCache: true });
   const offlineRenderer = testThree ? 'three' : 'canvas';

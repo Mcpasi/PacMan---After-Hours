@@ -42,10 +42,15 @@ function loop(ts) {
       ? level256Glitch.state.effect : null });
   // ready message
   if (gameState === 'playing' && player.alive && animFrame < 90) {
+    ctx.save();
     ctx.fillStyle = '#ffff00';
-    ctx.font = 'bold 20px monospace';
+    ctx.font = `bold ${Math.round(25 * canvas.width / (canvas.clientWidth || canvas.width))}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('READY!', canvas.width/2, canvas.height/2);
+    ctx.strokeStyle = '#101922';
+    ctx.lineWidth = 4;
+    ctx.strokeText('READY!', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('READY!', canvas.width / 2, canvas.height / 2);
+    ctx.restore();
   }
   requestAnimationFrame(loop);
 }

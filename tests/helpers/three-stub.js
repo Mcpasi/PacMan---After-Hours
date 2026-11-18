@@ -1,5 +1,5 @@
 // Scene-graph double, not a rasterizer. Real pixels are covered by the optional browser test.
-function createThreeStub() {
+function createThreeStub(OrthographicCamera) {
   const resources = [], renderers = [];
   const vector = () => ({ set(...values) { this.values = values; } });
   class Resource {
@@ -38,12 +38,8 @@ function createThreeStub() {
       this.shadow = Object.assign(new Resource(), { mapSize: vector(), camera: {} });
     }
   }
-  class OrthographicCamera extends Object3D {
-    lookAt(...values) { this.target = values; }
-    updateProjectionMatrix() { this.projectionUpdated = true; }
-  }
   class Element {
-    constructor() { this.listeners = new Map(); }
+    constructor() { this.listeners = new Map(); this.style = {}; }
     setAttribute() {}
     addEventListener(name, fn) { this.listeners.set(name, fn); }
     removeEventListener(name) { this.listeners.delete(name); }

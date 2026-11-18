@@ -2,6 +2,72 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { boot } = require('./helpers/game-harness');
 
+test('the new street plan keeps the tunnels, a closed ghost depot and a connected player route network', () => {
+  const game = boot();
+  const plan = game.run(`(() => {
+    const nav = GhostNavigation.create(maze, TILE);
+    const start = nav.cellAt(player);
+    const layout = CityLayout.create(maze, TILE);
+    const home = GhostProfiles.home, exit = GhostProfiles.exit;
+    const rows = maze.length, cols = maze[0].length;
+    const streetCells = layout.streets.filter(({ row, col }) => maze[row][col] !== 4);
+    const accessible = streetCells.filter(cell => Number.isFinite(nav.distance(start, cell)));
+    return {
+      dimensions: [cols, rows],
+      valid: maze.every(row => row.length === cols && row.every(cell => [0, 1, 2, 3, 4].includes(cell))),
+      tunnels: layout.tunnels,
+      unreachable: streetCells.length - accessible.length,
+      depotTiles: streetCells.filter(cell => Number.isFinite(nav.distance(home, cell))).length,
+      deadEnds: accessible.filter(cell => nav.neighbors(cell).length < 2).length,
+      depotClosed: nav.distance(home, exit) === Infinity,
+      ghostRoute: nav.distance(home, exit, true),
+      southernLights: maze.slice(24).flat().filter(cell => cell === 2 || cell === 3).length,
+      powerLights: maze.flat().filter(cell => cell === 3).length
+    };
+  })()`);
+  assert.deepEqual(Array.from(plan.dimensions), [28, 31]);
+  assert.equal(plan.valid, true);
+  assert.deepEqual(Array.from(plan.tunnels), [11]);
+  assert.equal(plan.unreachable, plan.depotTiles);
+  assert.equal(plan.deadEnds, 0);
+  assert.equal(plan.depotClosed, true);
+  assert.ok(Number.isFinite(plan.ghostRoute) && plan.ghostRoute > 0);
+  assert.ok(plan.southernLights > 40);
+  assert.equal(plan.powerLights, 4);
+});
+
+test('steering along the new streets can collect every light and advance to a fresh level', () => {
+  const game = boot({ random: () => 0 });
+  game.click();
+  const initial = game.run('JSON.stringify(maze)');
+  const expectedScore = game.run('maze.flat().reduce((total, cell) => total + (cell === 2 ? 10 : cell === 3 ? 50 : 0), 0)');
+  game.run(`
+    ghosts = [];
+    player.speed = TILE;
+    const nav = GhostNavigation.create(maze, TILE);
+    const targets = CityLayout.create(maze, TILE).collectibles;
+    for (const target of targets) {
+      while (maze[target.row][target.col] === 2 || maze[target.row][target.col] === 3) {
+        const current = nav.cellAt(player);
+        const distance = nav.distance(current, target);
+        if (!Number.isFinite(distance)) throw new Error('Unreachable light at ' + JSON.stringify(target));
+        // Step off the starting dot and back if it is the next target.
+        const next = nav.neighbors(current).find(cell => distance === 0 || nav.distance(cell, target) === distance - 1);
+        if (!next) throw new Error('No route from ' + JSON.stringify(current));
+        player.nextDir = next.dir;
+        updatePlayer();
+        if (nav.cellAt(player).index !== next.index) throw new Error('Turn blocked at ' + JSON.stringify(current));
+      }
+    }
+  `);
+  assert.equal(game.run('dotsLeft'), 0);
+  assert.equal(game.run('score'), expectedScore);
+  assert.equal(game.run('gameState'), 'levelComplete');
+  game.key('Enter');
+  assert.equal(game.run('level'), 2);
+  assert.equal(game.run('JSON.stringify(maze)'), initial);
+});
+
 for (const cell of [2, 3]) {
   test(`a tunnel-end ${cell === 2 ? 'dot' : 'power pellet'} is collected at its wrapped center and completes the level`, () => {
     const game = boot({ random: () => 0 });

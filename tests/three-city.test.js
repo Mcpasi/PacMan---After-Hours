@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const CityArchitecture = require('../scripts/rendering/city-architecture');
 const CityLayout = require('../scripts/rendering/city-layout');
+const CityView = require('../scripts/rendering/city-view');
 const { createThreeStub } = require('./helpers/three-stub');
 
 test('vendored Three.js loads locally with the GPU scene API', async () => {
@@ -13,9 +15,10 @@ test('vendored Three.js loads locally with the GPU scene API', async () => {
 
 async function createScene() {
   const { createCityScene } = await import('../scripts/rendering/city-three.mjs');
-  const stub = createThreeStub();
+  const { OrthographicCamera, Vector3 } = await import('../scripts/vendor/three.module.min.mjs');
+  const stub = createThreeStub(OrthographicCamera);
   let failures = 0, groundPaints = 0;
-  const scene = createCityScene({ ...stub, pixelRatio: 4,
+  const scene = createCityScene({ ...stub, architecture: CityArchitecture, pixelRatio: 4,
     paintGround() { groundPaints++; }, onFailure() { failures++; } });
   const layout = CityLayout.create([
     [0, 0, 0, 0, 0, 0, 0, 0],
@@ -26,26 +29,42 @@ async function createScene() {
     [0, 0, 0, 0, 0, 0, 0, 0]
   ], 16);
   scene.setLayout(layout);
-  return { ...stub, scene, layout, renderer: stub.renderers[0],
+  return { ...stub, scene, layout, Vector3, renderer: stub.renderers[0],
     failures: () => failures, groundPaints: () => groundPaints };
 }
 
-test('Three.js scene aligns with the grid and batches building geometry', async () => {
+test('the Three.js camera matches projected Canvas positions on the street and above it', async () => {
+  const { scene, layout, renderer, Vector3 } = await createScene();
+  const { width, height, view } = layout;
+  const { camera } = renderer;
+  camera.updateMatrixWorld();
+  assert.deepEqual(camera.position.toArray(), view.camera.position);
+  for (const [x, y, z] of [[0, 0, 0], [width, 0, 0], [0, height, 0], [width, height, 0],
+    [24, 40, view.spriteHeight], [72, 40, layout.tile], [0, height, -layout.tile * 0.68]]) {
+    const ndc = new Vector3(x, -y, z).project(camera);
+    const actual = [(ndc.x + 1) * view.width / 2, (1 - ndc.y) * view.height / 2];
+    const expected = CityView.project(view, x, y, z);
+    assert.ok(Math.hypot(actual[0] - expected[0], actual[1] - expected[1]) < 1e-9);
+  }
+  scene.dispose();
+});
+
+test('Three.js batches the shared city geometry and caches the ground and shadows', async () => {
   const { scene, layout, renderer, three, groundPaints } = await createScene();
   assert.equal(scene.name, 'three');
   assert.equal(renderer.pixelRatio, 1.75, 'pixel density must be capped for mobile GPUs');
-  assert.deepEqual(renderer.size, [layout.width, layout.height, false]);
-  assert.deepEqual(renderer.camera.position.values, [layout.width / 2, -layout.height / 2, 800]);
-  assert.deepEqual(renderer.camera.target, [layout.width / 2, -layout.height / 2, 0]);
-  assert.equal(renderer.camera.right - renderer.camera.left, layout.width);
-  assert.equal(renderer.camera.top - renderer.camera.bottom, layout.height);
-  assert.equal(renderer.camera.projectionUpdated, true);
-  const bodies = renderer.scene.children.find(mesh => mesh instanceof three.InstancedMesh && mesh.material.color === '#34434a');
-  assert.equal(bodies.count, layout.buildings.length);
-  for (const [i, building] of layout.buildings.entries()) {
-    assert.deepEqual(bodies.matrices[i].position,
-      [building.x + building.width / 2, -(building.y + building.depth / 2), building.height / 2]);
-    assert.deepEqual(bodies.matrices[i].scale, [building.width - 1, building.depth - 1, building.height]);
+  assert.deepEqual(renderer.size, [layout.view.width, layout.view.height, false]);
+  const parts = CityArchitecture.platform(layout).concat(layout.buildings.flatMap(block =>
+    CityArchitecture.building(block, layout.tile)));
+  for (const [key, material] of Object.entries(CityArchitecture.materials)) {
+    const expected = parts.filter(part => part.material === key);
+    const batch = renderer.scene.children.find(mesh => mesh instanceof three.InstancedMesh &&
+      mesh.material.color === material.color);
+    assert.equal(batch?.count || 0, expected.length);
+    expected.forEach(({ x, y, z, width, depth, height }, index) => {
+      assert.deepEqual(batch.matrices[index].position, [x + width / 2, -(y + depth / 2), z + height / 2]);
+      assert.deepEqual(batch.matrices[index].scale, [width, depth, height]);
+    });
   }
   const lights = renderer.scene.children.filter(child => child instanceof three.PointLight && child.color === '#ffbd70');
   assert.ok(lights.length <= 3 && lights.length > 0, 'streetlights must use a fixed GPU light budget');
@@ -82,6 +101,23 @@ test('Three.js reports context loss and refuses to render a lost or disposed con
   assert.throws(() => scene.draw(null, { time: 0, reducedMotion: false }), /context unavailable/);
   scene.dispose();
   assert.throws(() => scene.draw(null, { time: 0, reducedMotion: false }), /context unavailable/);
+});
+
+test('the fixed WebGL scene only redraws when its lighting changes', async () => {
+  const { scene, renderer, layout } = await createScene();
+  const initial = renderer.frames;
+  const frame = { time: 0, reducedMotion: false };
+  scene.draw(null, frame);
+  scene.draw(null, { ...frame, time: 1, view: { left: -190, top: 12, scale: 1.5 } });
+  assert.equal(renderer.frames, initial, 'the WebGL city is reused across foreground frames');
+  assert.equal(renderer.domElement.style.transform, 'translate(-190px, 12px) scale(1.5)');
+  const lampLevels = layout.lamps.map((_, index) => index === 0 ? 0.6 : 1);
+  scene.draw(null, { ...frame, reducedMotion: true, lampLevels });
+  scene.draw(null, { ...frame, time: 2, reducedMotion: true, lampLevels: lampLevels.slice() });
+  assert.equal(renderer.frames, initial + 1, 'an unchanged reduced-motion glitch reuses the dimmed scene');
+  scene.draw(null, { ...frame, reducedMotion: true });
+  assert.equal(renderer.frames, initial + 2, 'the original brightness returns when the glitch ends');
+  scene.dispose();
 });
 
 test('glitch dimming affects individual GPU lanterns, halos, pools and point lights without rebuilding the scene', async () => {

@@ -20,18 +20,20 @@ const scripts = [...html.matchAll(/<script(?:\s+src="([^"]+)"[^>]*>|>)([\s\S]*?)
 function boot(options = {}) {
   const elements = new Map(), frames = [], timers = [], drawing = [], media = [];
   const storage = new Map([['pacmanHigh', options.highScore || '0']]);
-  function makeContext() {
+  const noop = () => {};
+  const gradient = () => ({ addColorStop: noop });
+  function makeContext(record) {
     return new Proxy({}, {
       get(target, key) {
         if (key === 'createRadialGradient' || key === 'createLinearGradient') {
-          return (...args) => { drawing.push([key, ...args]); return { addColorStop() {} }; };
+          return record ? (...args) => { drawing.push([key, ...args]); return gradient(); } : gradient;
         }
-        return target[key] ?? ((...args) => drawing.push([key, ...args]));
+        return target[key] ?? (record ? (...args) => drawing.push([key, ...args]) : noop);
       }
     });
   }
   class Element {
-    constructor() {
+    constructor(record = false) {
       this.style = {}; this.dataset = {}; this.listeners = new Map(); this.children = [];
       const classes = new Set();
       this.classList = {
@@ -39,7 +41,7 @@ function boot(options = {}) {
         contains(name) { return classes.has(name); }
       };
       this.attributes = new Map();
-      this.context2d = makeContext();
+      this.context2d = makeContext(record);
     }
     setAttribute(name, value) { this.attributes.set(name, String(value)); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
@@ -70,8 +72,8 @@ function boot(options = {}) {
     }
     get innerHTML() { return this.html || ''; }
   }
-  for (const id of ['gameContainer', 'fullscreenBtn', 'gameCanvas', 'gameViewport', 'worldClock', 'score', 'highScore', 'lives', 'overlay', 'startBtn']) {
-    elements.set(id, new Element());
+  for (const id of ['gameContainer', 'fullscreenBtn', 'gameCanvas', 'gameViewport', 'mazeOverview', 'worldClock', 'score', 'highScore', 'lives', 'overlay', 'startBtn']) {
+    elements.set(id, new Element(id === 'gameCanvas'));
   }
   elements.get('worldClock').dataset.presentTime = '03:17 AM';
   elements.get('worldClock').textContent = '03:17 AM';

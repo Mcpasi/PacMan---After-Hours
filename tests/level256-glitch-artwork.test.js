@@ -169,7 +169,7 @@ test('the shared overlay stays below collectibles and actors in any environment'
     level256Glitch.state.ticksUntilGlitch = 1; level256Glitch.update();
     Object.assign(level256Glitch.state.effect, { phase: 'cluster', age: 20, duration: 63 });
     GameRenderer.setEnvironment({ setLayout() {}, draw() { layers.push('city'); } });
-    const arc = ctx.arc; ctx.arc = (...args) => { if (args[2] === 1.8) layers.push('dot'); arc(...args); };
+    const arc = ctx.arc; ctx.arc = (...args) => { if (args[2] === 2.2) layers.push('dot'); arc(...args); };
     GameRenderer.setActors({ player() { layers.push('player'); }, ghosts() { layers.push('ghosts'); } });`);
   game.advance();
   const layers = JSON.parse(game.run('JSON.stringify(layers)'));
@@ -184,17 +184,24 @@ test('Canvas lamps dim their real light pools and restore them after the event',
   const game = boot();
   const city = game.run('CanvasCity.create({ createCanvas: () => document.createElement("canvas") })');
   city.setLayout(layout);
-  const colors = [];
-  const ctx = { drawImage() {}, save() {}, restore() {}, fillRect() {},
-    createRadialGradient: () => ({ addColorStop(stop, color) { if (stop === 0) colors.push(color); } }) };
+  const brightness = [];
+  const ctx = {
+    globalAlpha: 1,
+    drawImage(image, x, y, width) {
+      if (width === layout.tile * 4.5) brightness.push(this.globalAlpha);
+    },
+    save() {}, restore() {}, fillRect() {}, transform() {},
+    beginPath() {}, rect() {}, clip() {}, moveTo() {}, lineTo() {}, stroke() {}
+  };
   city.draw(ctx, { time: 0, reducedMotion: true });
-  const baseline = colors.splice(0);
+  const baseline = brightness.splice(0);
+  assert.deepEqual(baseline, layout.lamps.map(() => 1));
   const visual = Artwork.create(layout).frame(effect, { reducedMotion: true });
   city.draw(ctx, { time: 0, reducedMotion: true, lampLevels: visual.lampLevels });
-  const dimmed = colors.splice(0);
-  assert.equal(dimmed.filter((color, i) => color !== baseline[i]).length, 3);
+  const dimmed = brightness.splice(0);
+  assert.deepEqual(dimmed, visual.lampLevels);
   city.draw(ctx, { time: 0, reducedMotion: true });
-  assert.deepEqual(colors, baseline);
+  assert.deepEqual(brightness, baseline);
 });
 
 test('the shared renderer passes per-lamp dimming to the environment and hides corruption during death', () => {

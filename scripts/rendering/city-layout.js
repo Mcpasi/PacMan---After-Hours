@@ -1,5 +1,8 @@
 // Visual data only: the collision grid remains owned by the game.
 const CityLayout = (() => {
+  const camera = typeof module !== 'undefined' && module.exports ? require('./city-view') : CityView;
+  const edges = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+
   function noise(x, y) {
     let value = Math.imul(x + 17, 374761393) ^ Math.imul(y + 31, 668265263);
     value = Math.imul(value ^ (value >>> 13), 1274126177);
@@ -13,16 +16,18 @@ const CityLayout = (() => {
     const rows = maze.length, cols = maze[0].length;
     if (maze.some(row => row.length !== cols)) throw new TypeError('The city grid must be rectangular.');
     const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
-    const buildings = [], streets = [], collectibles = [], candidates = [], lamps = [];
+    const buildings = [], streets = [], collectibles = [], candidates = [], lamps = [], tunnels = [];
     const wall = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && maze[r][c] === 0;
 
     for (let r = 0; r < rows; r++) {
+      if (maze[r][0] !== 0 && maze[r][cols - 1] !== 0) tunnels.push(r);
       for (let c = 0; c < cols; c++) {
         const cell = maze[r][c];
         if (cell !== 0) {
-          streets.push({ row: r, col: c, seed: noise(c, r) });
+          const curbs = edges.map(([dx, dy]) => wall(r + dy, c + dx));
+          streets.push({ row: r, col: c, seed: noise(c, r), curbs });
           if (cell === 2 || cell === 3 || cell === 4) collectibles.push({ row: r, col: c });
-          const edge = [[0, -1], [1, 0], [0, 1], [-1, 0]].find(([dx, dy]) => wall(r + dy, c + dx));
+          const edge = edges[curbs.indexOf(true)];
           if (edge && cell !== 4) {
             candidates.push({
               row: r, col: c, power: cell === 3,
@@ -43,9 +48,10 @@ const CityLayout = (() => {
           for (let x = c; x < c + width; x++) visited[y][x] = true;
         }
         const seed = noise(c, r);
+        const border = r === 0 || c === 0 || r + height === rows || c + width === cols;
         buildings.push({ row: r, col: c, cols: width, rows: height,
           x: c * tile, y: r * tile, width: width * tile, depth: height * tile,
-          height: tile * (0.45 + seed * 0.9), seed });
+          height: tile * (border ? 0.4 + seed * 0.18 : 0.55 + seed * 0.45), seed });
       }
     }
     candidates.sort((a, b) => Number(b.power) - Number(a.power) || a.seed - b.seed);
@@ -55,7 +61,8 @@ const CityLayout = (() => {
         lamps.push(candidate);
       }
     }
-    return { width: cols * tile, height: rows * tile, tile, buildings, streets, collectibles, lamps };
+    const dimensions = { width: cols * tile, height: rows * tile, tile };
+    return { ...dimensions, buildings, streets, collectibles, lamps, tunnels, view: camera.create(dimensions) };
   }
   return { create, noise };
 })();

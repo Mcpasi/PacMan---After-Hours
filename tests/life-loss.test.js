@@ -80,7 +80,7 @@ test('respawn resets actors, temporary power state and the clock without rebuild
 
   game.drawing.length = 0;
   game.advance(); // Establish the new clock and render without a simulation tick.
-  assert.equal(game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 1.8).length,
+  assert.equal(game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 2.2).length,
     game.run('maze.flat().filter(cell => cell === 2).length'));
   assert.equal(game.drawing.some(([method, x, y, radius]) =>
     method === 'arc' && x === 1.5 * 16 && y === 3.5 * 16 && radius === 4.5), false);
@@ -91,6 +91,8 @@ test('the final remaining dot still completes the level after respawn and the ne
   game.click();
   const freshMaze = game.run('JSON.stringify(maze)'), totalDots = game.run('dotsLeft');
   game.run(`player.speed = 0;
+    // Keep the bonus coin pending while the remaining lights are collected.
+    bonusLife.state.ticksUntilSpawn = dotsLeft + 1;
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
         if ((row === 1 && col === 1) || (maze[row][col] !== 2 && maze[row][col] !== 3)) continue;

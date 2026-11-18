@@ -41,7 +41,7 @@ After all the years spent wandering through the dark and deserted labyrinth, the
 
 **Touchcontrol:** Mobile controls added, simply use your screen to operate Pac-Man.
 
-**Redesign:** The entire world of Pac-Man has been redesigned; play Pac-Man in a gloomy city, illuminated by streetlights, as you try to escape the ghosts.
+**Redesign:** Old Town fills the available play area in an angled view with detailed facades, wet roads and marked tunnel entrances. On smaller screens, the camera follows the player at a larger scale and a live overview shows the whole maze. WebGL, the Canvas fallback and the 1980 pixel city share the camera and street geometry. Arrow keys, WASD and swipes follow the street grid.
 
 **Pac-Man has been given a new design:** dark brass/amber look with soot shadows, glowing cracks, and a narrow glowing eye, includes matching life symbols and a power-glow effect.
 
@@ -90,9 +90,7 @@ All four ghosts have also received a new design and new colors from me.
 
 - Improved mobile scaling, especially in 
   landscape orientation.
-- The entire map remains visible and 
-  undistorted; graphics and game logic 
-  remain unchanged.
+- The view fills the screen. When the camera follows the player, the overview keeps the full map visible.
 
 **Game speed:** The game speed is now 20% lower at the start.
 
@@ -116,13 +114,11 @@ All four ghosts have also received a new design and new colors from me.
 
 **Test coverage**
 
-Without a browser, browser test is skipped    
+On Linux, the runner uses `taskset` and `flock` from util-linux. It serializes test runs and pins Node, Chromium and their child processes to a single CPU.
 
-`node --test tests/*.test.js`                   
-                                                   
-With Chromium – all tests 
-
-`PACMAN_BROWSER=chromium node --test tests/*.test.js`
+- `sh tests/run.sh all` runs the unit, Canvas, audio and WebGL suites in sequence.
+- `sh tests/run.sh unit` runs the unit suite. Add a test path to run just that file.
+- `sh tests/run.sh canvas` or `sh tests/run.sh webgl` runs one Chromium mode. Set `PACMAN_BROWSER` to choose another Chromium executable.
 
 
 --McPasi--

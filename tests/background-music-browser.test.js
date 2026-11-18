@@ -1,5 +1,4 @@
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const fs = require('node:fs/promises');
 const http = require('node:http');
@@ -7,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const test = require('node:test');
+const { launchChromium } = require('./helpers/chromium');
 
 const executable = process.env.PACMAN_BROWSER;
 const root = path.resolve(__dirname, '..');
@@ -21,7 +21,7 @@ async function waitFor(check, message, timeout = 15000) {
 }
 
 test('browser music: audible HTTP stream and local-file playback without CORS silence', {
-  skip: !executable && 'Set PACMAN_BROWSER to an Edge/Chromium executable.', timeout: 60000
+  skip: !executable && 'Run sh tests/run.sh canvas.', timeout: 120000
 }, async t => {
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'pacman-music-'));
   let browser, socket, stderr = '', startupError, sequence = 0;
@@ -56,7 +56,7 @@ test('browser music: audible HTTP stream and local-file playback without CORS si
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  browser = spawn(executable, ['--headless', '--disable-gpu', '--disable-software-rasterizer',
+  browser = launchChromium(executable, ['--headless', '--disable-gpu', '--disable-software-rasterizer',
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank']);
   browser.stderr.on('data', chunk => { stderr += chunk; });
   browser.on('error', error => { startupError = error; });

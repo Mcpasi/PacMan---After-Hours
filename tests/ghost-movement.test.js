@@ -72,7 +72,7 @@ test('equivalent player coordinates at the tunnel seam preserve chase and fright
   const navigation = GhostNavigation.create(maze, tile);
   for (const scared of [false, true]) {
     const outcomes = [-2, navigation.width - 2].map(x => {
-      const ghost = actor('blinky', 14, 4, 1);
+      const ghost = actor('blinky', 15, 4, 1);
       ghost.scared = scared;
       const pacman = { ...player(27, 11, 2), x };
       GhostController.create(maze, tile).update([ghost], pacman, scared);

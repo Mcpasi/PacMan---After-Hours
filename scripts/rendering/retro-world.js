@@ -2,7 +2,6 @@
 const RetroWorldArtwork = (() => {
   const ghostColors = ['#ff0000', '#ffb8ff', '#00ffff', '#ffb852'];
   const size = 16;
-  const wallTiles = new Map();
   const playerFrames = [0, 0.4, 0.9].map(bite => Array.from({ length: size }, (_, y) =>
     Array.from({ length: size }, (_, x) => {
       const dx = x - 7.5, dy = y - 7.5;
@@ -47,72 +46,27 @@ const RetroWorldArtwork = (() => {
     ctx.scale(pixel, pixel);
   }
 
-  function wallTile(mask) {
-    if (wallTiles.has(mask)) return wallTiles.get(mask);
-    const exposed = [];
-    let bit = 1;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      if (!dx && !dy) continue;
-      if (mask & bit) exposed.push([dx, dy]);
-      bit <<= 1;
-    }
-    const rows = Array.from({ length: size }, (_, y) => Array.from({ length: size }, (_, x) => {
-      let distance = size;
-      for (const [dx, dy] of exposed) {
-        distance = Math.min(distance, Math.max(dx < 0 ? x + 1 : dx > 0 ? size - x : 0,
-          dy < 0 ? y + 1 : dy > 0 ? size - y : 0));
-      }
-      return distance === 1 || distance === 3 ? '1' : '0';
-    }).join(''));
-    wallTiles.set(mask, rows);
-    return rows;
-  }
-
-  function paintBackground(ctx, maze, tile) {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, maze[0].length * tile, maze.length * tile);
-    ctx.fillStyle = '#2121ff';
-    const pixel = tile / size;
-    maze.forEach((row, r) => row.forEach((cell, c) => {
-      if (cell !== 0) return;
-      let mask = 0, bit = 1;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        if (maze[r + dy]?.[c + dx] !== 0) mask |= bit;
-        bit <<= 1;
-      }
-      // Two one-pixel contours with a black gap; adjacent walls have no tile seams.
-      bitmap(ctx, wallTile(mask), c * size, r * size, pixel);
-    }));
-  }
-
-  function create(maze, tile, { createCanvas }) {
-    const background = createCanvas();
-    background.width = maze[0].length * tile;
-    background.height = maze.length * tile;
-    paintBackground(background.getContext('2d'), maze, tile);
-    return {
-      drawMaze(ctx, liveMaze) {
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(background, 0, 0);
-        liveMaze.forEach((row, r) => row.forEach((cell, c) => {
-          const x = (c + 0.5) * tile, y = (r + 0.5) * tile;
-          if (cell === 4) {
-            ctx.fillStyle = '#ffb8ff';
-            ctx.fillRect(c * tile, r * tile + tile * 6 / size, tile, tile * 2 / size);
-          } else if (cell === 2) {
-            ctx.fillStyle = '#ffb8ae';
-            ctx.fillRect(x - tile / 16, y - tile / 16, tile / 8, tile / 8);
-          } else if (cell === 3) {
-            ctx.fillStyle = '#ffb8ae';
-            ctx.save(); ctx.translate(x, y); ctx.scale(tile / size, tile / size);
-            bitmap(ctx, pellet, -4, -4); ctx.restore();
-          }
-        }));
+  function drawCollectibles(ctx, maze, { tile, collectibles }) {
+    ctx.save();
+    for (const { row, col } of collectibles) {
+      const value = maze[row][col];
+      const x = (col + 0.5) * tile, y = (row + 0.5) * tile;
+      if (value === 4) {
+        ctx.fillStyle = '#ffb8ff';
+        ctx.fillRect(col * tile, row * tile + tile * 6 / size, tile, tile * 2 / size);
+      } else if (value === 2) {
+        ctx.fillStyle = '#ffb8ae';
+        ctx.fillRect(x - tile / 8, y - tile / 8, tile / 4, tile / 4);
+      } else if (value === 3) {
+        ctx.fillStyle = '#ffb8ae';
+        ctx.save(); ctx.translate(x, y); ctx.scale(tile / size, tile / size);
+        bitmap(ctx, pellet, -4, -4);
+        ctx.fillStyle = '#fff4ad';
+        ctx.fillRect(-2, -2, 4, 4);
         ctx.restore();
       }
-    };
+    }
+    ctx.restore();
   }
 
   function player(ctx, actor, { tile }) {
@@ -207,7 +161,7 @@ const RetroWorldArtwork = (() => {
     }
   }
 
-  return { create, player, ghosts, death, lifeEffect };
+  return { drawCollectibles, player, ghosts, death, lifeEffect };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = RetroWorldArtwork;

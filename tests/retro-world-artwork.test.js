@@ -1,6 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const Artwork = require('../scripts/rendering/retro-world');
+const RetroCityArtwork = require('../scripts/rendering/retro-city');
+const CityLayout = require('../scripts/rendering/city-layout');
+const CityView = require('../scripts/rendering/city-view');
+const CityArchitecture = require('../scripts/rendering/city-architecture');
 const BonusArtwork = require('../scripts/rendering/bonus-life');
 const FreezeArtwork = require('../scripts/rendering/freeze-powerups');
 const PlayerDeath = require('../scripts/player-death');
@@ -28,15 +32,6 @@ function recording() {
   return { ctx, calls, state, stack };
 }
 
-function create(maze, tile = 16) {
-  const background = recording();
-  const canvas = { getContext: () => background.ctx };
-  const before = structuredClone(maze);
-  const artwork = Artwork.create(maze, tile, { createCanvas: () => canvas });
-  assert.deepEqual(maze, before);
-  return { artwork, background, canvas };
-}
-
 function paint(method, actors, options = {}) {
   const record = recording(), before = structuredClone(record.state);
   const settings = { tile: 16, dirs: [[1, 0], [0, 1], [-1, 0], [0, -1]], ...options };
@@ -61,43 +56,52 @@ function pixels(calls, color) {
   return result;
 }
 
-test('all 3×3 wall patterns produce pixel-exact blue double contours without internal tile seams', () => {
-  for (let mask = 0; mask < 512; mask++) {
-    const maze = Array.from({ length: 3 }, (_, row) =>
-      Array.from({ length: 3 }, (_, col) => mask & (1 << (row * 3 + col)) ? 0 : 1));
-    const { background, canvas } = create(maze);
-    const calls = background.calls;
-    const blue = pixels(calls, '#2121ff');
-    const wall = (x, y) => maze[Math.floor(y / 16)]?.[Math.floor(x / 16)] === 0;
-    for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) {
-      let distance = 4;
-      if (wall(x, y)) for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
-        if (!wall(x + dx, y + dy)) distance = Math.min(distance, Math.max(Math.abs(dx), Math.abs(dy)));
-      }
-      assert.equal(blue.has(`${x},${y}`), wall(x, y) && (distance === 1 || distance === 3), `pattern ${mask}, pixel ${x},${y}`);
+test('pixel buildings paint the projected roofs, facades and street grid with whole-pixel spans', () => {
+  const maze = [[1, 1, 1, 1], [1, 0, 0, 1], [1, 1, 1, 1]];
+  const layout = CityLayout.create(maze, 16);
+  const record = recording();
+  const before = structuredClone(layout);
+  RetroCityArtwork.paint(record.ctx, layout);
+  assert.deepEqual(layout, before);
+  assert.deepEqual(record.calls.find(([method]) => method === 'fillRect'),
+    ['fillRect', 0, 0, layout.view.width, layout.view.height]);
+  const image = new Map();
+  let color;
+  for (const [method, x, y, width, height] of record.calls) {
+    if (method === 'set' && x === 'fillStyle') {
+      color = y;
+      assert.ok(RetroCityArtwork.colors.includes(color));
     }
-    assert.deepEqual([canvas.width, canvas.height], [48, 48]);
-    assert.deepEqual(calls.find(([method]) => method === 'fillRect'), ['fillRect', 0, 0, 48, 48]);
-    assert.equal(calls.some(([method]) => /arc|Curve|stroke/.test(method)), false);
+    if (method !== 'fillRect') continue;
+    assert.ok([x, y, width, height].every(Number.isInteger));
+    for (let row = y; row < y + height; row++) for (let col = x; col < x + width; col++) {
+      image.set(`${col},${row}`, color);
+    }
   }
+  const sample = (x, y, z) => {
+    const [u, v] = CityView.project(layout.view, x, y, z).map(Math.floor);
+    return image.get(`${u},${v}`);
+  };
+  const [block] = layout.buildings;
+  const roof = CityArchitecture.building(block, layout.tile)[2];
+  assert.equal(sample(8, 8, 0), '#141d39');
+  assert.ok(['#2b3d66', '#30586d', '#453d6a'].includes(sample(roof.x + 7, roof.y + 5, roof.z + roof.height)));
+  assert.ok(new Set(image.values()).size > 9, 'roofs, faces and windows must render distinctly');
 });
 
-test('the black maze is cached but pellets, power pellets and the house door use the live grid', () => {
-  const maze = [[0, 2, 3, 4, 1]], { artwork, background } = create(maze);
-  const cached = structuredClone(background.calls);
+test('pixel pellets and the depot gate use the current maze cells', () => {
+  const maze = [[0, 2, 3, 4, 1]], layout = CityLayout.create(maze, 16);
   const record = recording(), before = structuredClone(record.state);
-  artwork.drawMaze(record.ctx, maze);
+  Artwork.drawCollectibles(record.ctx, maze, layout);
   assert.deepEqual(record.state, before);
-  assert.ok(record.calls.some(([method, x, y, w, h]) => method === 'fillRect' && x === 23 && y === 7 && w === 2 && h === 2));
+  assert.ok(record.calls.some(([method, x, y, w, h]) => method === 'fillRect' && x === 22 && y === 6 && w === 4 && h === 4));
   assert.ok(record.calls.some(([method, x, y, w, h]) => method === 'fillRect' && x === -2 && y === -4 && w === 4 && h === 1));
   assert.ok(record.calls.some(([method, x, y, w, h]) => method === 'fillRect' && x === 48 && y === 6 && w === 16 && h === 2));
-  assert.ok(record.calls.some(([method, key, value]) => method === 'set' && key === 'imageSmoothingEnabled' && value === false));
   maze[0][1] = 1; maze[0][2] = 1;
   record.calls.length = 0;
-  artwork.drawMaze(record.ctx, maze);
+  Artwork.drawCollectibles(record.ctx, maze, layout);
   assert.equal(record.calls.some(([method]) => method === 'arc'), false);
   assert.equal(record.calls.filter(([method]) => method === 'fillRect').length, 1, 'only the door remains');
-  assert.deepEqual(background.calls, cached, 'collecting never rebuilds the static blue walls');
 });
 
 test('the yellow player uses whole-pixel bitmaps, snapped artwork and all four bite headings at every scale', () => {
@@ -198,7 +202,7 @@ test('retro feedback stays on the pixel grid through motion, late fading and red
   }
 });
 
-test('pixelated display scaling is limited to the retro visit and resets when returning or restarting', () => {
+test('the pixel world indicator follows the transition and clears on restart', () => {
   const game = boot(); game.click(); game.key('p');
   const canvas = game.elements.get('gameCanvas');
   for (const mix of [0, 0.5, 1, 0.5, 0]) {
@@ -220,10 +224,9 @@ test('reduced motion freezes arcade feet and expiry flashes, while regular anima
 test('the complete retro layer blends after atmosphere, including its death and bonus feedback', () => {
   const game = boot(); game.click();
   game.run(`globalThis.layers = [];
-    const createRetro = RetroWorldArtwork.create;
-    RetroWorldArtwork.create = (...args) => {
-      const artwork = createRetro(...args);
-      return { drawMaze(ctx, maze) { layers.push('retroMaze'); artwork.drawMaze(ctx, maze); } };
+    const collectibles = RetroWorldArtwork.drawCollectibles;
+    RetroWorldArtwork.drawCollectibles = (...args) => {
+      layers.push('retroMaze'); collectibles(...args);
     };
     resetLevel(false);
     GameRenderer.setEnvironment({ setLayout() {}, draw() { layers.push('environment'); } });
