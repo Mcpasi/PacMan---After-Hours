@@ -18,7 +18,7 @@ function paint(draw, entity, options = {}) {
     },
     get(target, key) {
       if (key in target) return target[key];
-      if (key === 'createLinearGradient') return (...args) => {
+      if (key === 'createLinearGradient' || key === 'createRadialGradient') return (...args) => {
         calls.push([key, ...args]); return { addColorStop: (...args) => calls.push(['addColorStop', ...args]) };
       };
       return (...args) => calls.push([key, ...args]);
@@ -47,9 +47,15 @@ test('Old Town finds have distinct brass-and-frost silhouettes; the retro world 
       for (const color of ['#e0c58c', '#967344', '#464c43']) {
         assert.ok(lantern.some(([method, , value]) => method === 'addColorStop' && value === color));
       }
+      for (const calls of [lantern, watch]) {
+        for (const color of ['#a1eee8', '#3c8c9c', '#143d50']) {
+          assert.ok(calls.some(([method, , value]) => method === 'addColorStop' && value === color),
+            'both finds use shaded cold glass');
+        }
+      }
       assert.ok(lantern.some(([method, key, value]) => method === 'set' && key === 'strokeStyle' && value === '#c9f5f2'));
     } else {
-      assert.equal(lantern.some(([method]) => method === 'createLinearGradient'), false);
+      assert.equal(lantern.some(([method]) => method === 'createLinearGradient' || method === 'createRadialGradient'), false);
       assert.ok(lantern.some(([method]) => method === 'fillRect'));
     }
   }

@@ -1,6 +1,6 @@
-// Normalized Canvas artwork: silhouettes and expressions never influence collisions.
 const GhostArtwork = (() => {
   const profiles = typeof module !== 'undefined' && module.exports ? require('../ghosts/profiles') : GhostProfiles;
+  const lighting = typeof module !== 'undefined' && module.exports ? require('./city-lighting') : CityLighting;
 
   function body(ctx, id, sway) {
     ctx.beginPath();
@@ -98,7 +98,62 @@ const GhostArtwork = (() => {
     }
   }
 
-  function draw(ctx, ghosts, { tile, colors, dirs, powerTimer = 0, animFrame = 0, time = animFrame / 60, reducedMotion = false, frozen = false }) {
+  function drawHood(ctx, profile, sway, { color, accent, scared, flash, lamp, tile }) {
+    const veil = ctx.createRadialGradient(-0.24, -0.43, 0.03, 0, -0.22, 0.73);
+    veil.addColorStop(0, accent);
+    veil.addColorStop(0.35, color);
+    veil.addColorStop(0.82, scared ? (flash ? '#657b9e' : '#2b427d') : '#29313e');
+    veil.addColorStop(1, '#172732');
+    ctx.fillStyle = veil;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 0.033;
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = tile * 0.24;
+    body(ctx, profile.id, sway);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // The trailing cloth catches the street's cool bounce light underneath.
+    ctx.clip();
+    const hem = ctx.createLinearGradient(0, 0.12, 0, 0.55);
+    hem.addColorStop(0, 'rgba(14, 28, 39, 0)');
+    hem.addColorStop(0.52, 'rgba(14, 28, 39, 0.55)');
+    hem.addColorStop(1, 'rgba(140, 192, 204, 0.35)');
+    ctx.fillStyle = hem;
+    ctx.fillRect(-0.58, 0.12, 1.16, 0.45);
+
+    ctx.strokeStyle = `rgba(255, 231, 192, ${0.3 + lamp * 0.34})`;
+    ctx.lineWidth = 0.056;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-0.39, -0.16);
+    ctx.quadraticCurveTo(-0.31, -0.51, 0.09, -0.49);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(165, 211, 222, 0.36)';
+    ctx.lineWidth = 0.037;
+    ctx.beginPath();
+    ctx.moveTo(0.38, 0.04);
+    ctx.quadraticCurveTo(0.35, 0.22, 0.45, 0.38);
+    ctx.moveTo(-0.31, 0.11);
+    ctx.quadraticCurveTo(-0.34, 0.22, -0.27, 0.37);
+    ctx.stroke();
+
+    const hollow = ctx.createLinearGradient(0, -0.4, 0, 0.08);
+    hollow.addColorStop(0, flash ? '#738bad' : '#141c2c');
+    hollow.addColorStop(1, flash ? '#d4e6fa' : scared ? '#4568ba' : '#454657');
+    ctx.fillStyle = hollow;
+    ctx.strokeStyle = 'rgba(224, 239, 242, 0.38)';
+    ctx.lineWidth = 0.03;
+    ctx.beginPath();
+    ctx.ellipse(0, -0.17, 0.35, 0.228, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function draw(ctx, ghosts, { tile, colors, dirs, powerTimer = 0, animFrame = 0, time = animFrame / 60,
+    reducedMotion = false, frozen = false, lampAt }) {
     for (const ghost of ghosts) {
       if (ghost.mode === 'house' && ghost.houseTimer > 30) continue;
       const profile = profiles.get(ghost);
@@ -110,17 +165,12 @@ const GhostArtwork = (() => {
         ctx.restore();
         continue;
       }
-      ctx.fillStyle = 'rgba(3, 10, 17, 0.4)';
-      ctx.beginPath(); ctx.ellipse(0, 0.42, 0.4, 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      lighting.ground(ctx, 0.46, 0.54, ghost.scared ? 'rgba(113, 160, 255, 0.32)' : 'rgba(179, 218, 226, 0.23)');
       ctx.translate(0, sway);
       const color = ghost.scared ? (flash ? '#edf7ff' : '#4769d5') : colors?.[ghost.color] || profile.color;
       const accent = ghost.scared ? (flash ? '#ffffff' : '#8bc4ff') : profile.accent;
-      const gradient = ctx.createLinearGradient(-0.3, -0.6, 0.35, 0.5);
-      gradient.addColorStop(0, accent); gradient.addColorStop(0.35, color); gradient.addColorStop(1, ghost.scared ? '#2b427d' : '#29313e');
-      ctx.fillStyle = gradient; ctx.strokeStyle = accent; ctx.lineWidth = 0.035;
-      ctx.lineJoin = 'round'; ctx.shadowColor = color; ctx.shadowBlur = tile * 0.35;
-      body(ctx, profile.id, sway); ctx.fill(); ctx.stroke();
-      ctx.shadowBlur = 0;
+      drawHood(ctx, profile, sway, { color, accent, scared: ghost.scared, flash,
+        lamp: lampAt?.(ghost.x, ghost.y) ?? 0, tile });
       eyes(ctx, ghost, dirs, { scared: ghost.scared, flash });
       if (ghost.scared) {
         ctx.strokeStyle = flash ? '#263b64' : '#d6f2ff'; ctx.lineWidth = 0.045;

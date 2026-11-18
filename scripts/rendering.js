@@ -58,24 +58,21 @@ const GameRenderer = (() => {
     actors = { ...actors, ...next };
   }
 
-  function drawCollectibles(ctx, frame, maze) {
+  function drawCollectibles(ctx, maze, options) {
+    const { tile } = options;
     for (const { row, col } of layout.collectibles) {
       const cell = maze[row][col];
-      const x = (col + 0.5) * TILE, y = (row + 0.5) * TILE;
+      const x = (col + 0.5) * tile, y = (row + 0.5) * tile;
       if (cell === 4) {
         ctx.fillStyle = '#d09087';
-        ctx.fillRect(col * TILE, row * TILE + TILE * 0.4, TILE, 2);
-      } else if (cell === 2 || cell === 3) {
-        ctx.fillStyle = cell === 3 ? '#ffe9b2' : '#d4c8a2';
+        ctx.fillRect(col * tile, row * tile + tile * 0.4, tile, 2);
+      } else if (cell === 3) {
+        PowerPelletArtwork.draw(ctx, x, y, options);
+      } else if (cell === 2) {
+        ctx.fillStyle = '#d4c8a2';
         ctx.beginPath();
-        const pulse = frame.reducedMotion ? 0 : Math.sin(frame.time * 2) * 0.6;
-        ctx.arc(x, y, cell === 3 ? 4.5 + pulse : 1.8, 0, Math.PI * 2);
+        ctx.arc(x, y, 1.8, 0, Math.PI * 2);
         ctx.fill();
-        if (cell === 3) {
-          ctx.strokeStyle = 'rgba(255, 222, 156, 0.25)';
-          ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.arc(x, y, 7 + pulse, 0, Math.PI * 2); ctx.stroke();
-        }
       }
     }
   }
@@ -150,15 +147,16 @@ const GameRenderer = (() => {
     try { environment.draw(ctx, frame); } catch { useFallback(); fallback.draw(ctx, frame); }
     // Corruption stays in the scenery: pellets, bonuses and every actor remain readable.
     glitchArtwork.draw(ctx, glitch);
-    drawCollectibles(ctx, frame, state.maze);
     const options = { tile: TILE, colors: GHOST_COLORS, dirs: DIRS,
       powerTimer: state.powerTimer, animFrame: reducedMotion ? 0 : state.animFrame, time, reducedMotion,
       frozen: state.freezePowerUps?.remainingTicks > 0 };
-    BonusLifeArtwork.drawCoin(ctx, state.bonusLife?.coin, options);
-    FreezePowerUpArtwork.drawPickups(ctx, state.freezePowerUps, options);
-    drawActors(ctx, state, options, actors);
+    const cityOptions = { ...options, lampAt: (x, y) => CityLighting.lampLevelAt(layout, frame.lampLevels, x, y) };
+    drawCollectibles(ctx, state.maze, cityOptions);
+    BonusLifeArtwork.drawCoin(ctx, state.bonusLife?.coin, cityOptions);
+    FreezePowerUpArtwork.drawPickups(ctx, state.freezePowerUps, cityOptions);
+    drawActors(ctx, state, cityOptions, actors);
     fallback.drawAtmosphere(ctx, frame);
-    drawFeedback(ctx, state, options, { death: PlayerDeathArtwork.draw, lifeEffect: BonusLifeArtwork.drawEffect });
+    drawFeedback(ctx, state, cityOptions, { death: PlayerDeathArtwork.draw, lifeEffect: BonusLifeArtwork.drawEffect });
     drawRetroWorld(ctx, state, options);
     FreezePowerUpArtwork.drawStatus(ctx, state.freezePowerUps, { ...options, width: layout.width });
   }

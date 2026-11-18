@@ -11,11 +11,13 @@ const test = require('node:test');
 // PACMAN_BROWSER=chromium PACMAN_TEST_THREE=1 node --test tests/browser.test.js
 // Both modes forbid external resources. Omit PACMAN_TEST_THREE to test the Canvas fallback.
 const executable = process.env.PACMAN_BROWSER;
+const testThree = process.env.PACMAN_TEST_THREE === '1';
 const root = path.join(__dirname, '..');
 
 async function connect(url) {
   const socket = new WebSocket(url);
   await once(socket, 'open', { signal: AbortSignal.timeout(15000) });
+  const commandTimeout = testThree ? 45000 : 15000;
   let sequence = 0;
   const pending = new Map(), errors = [], requests = [];
   socket.addEventListener('message', event => {
@@ -40,7 +42,7 @@ async function connect(url) {
   function send(method, params = {}) {
     const id = ++sequence;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timed out: ${method}`)); }, 15000);
+      const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timed out: ${method}`)); }, commandTimeout);
       pending.set(id, { resolve, reject, timer });
       socket.send(JSON.stringify({ id, method, params }));
     });
@@ -65,7 +67,9 @@ async function waitFor(check, message, timeout = 20000) {
 }
 
 test('browser smoke: city, actors, death fragments, search, movement, pause, mobile layout and offline fallback', {
-  skip: !executable && 'Set PACMAN_BROWSER to a Chromium executable.', timeout: 90000
+  skip: !executable && 'Set PACMAN_BROWSER to a Chromium executable.',
+  // Software WebGL needs more time when Chromium is pinned to a single core.
+  timeout: testThree ? 420000 : 90000
 }, async t => {
   let browser, client, profile;
   const server = http.createServer(async (request, response) => {
@@ -108,7 +112,6 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   const preferredTemp = '/data/user/0/com.foxdebug.acode/cache/opencode';
   const temp = await fs.stat(preferredTemp).then(() => preferredTemp, () => os.tmpdir());
   profile = await fs.mkdtemp(path.join(temp, 'pacman-browser-'));
-  const testThree = process.env.PACMAN_TEST_THREE === '1';
   const gpuArgs = process.env.PACMAN_BROWSER_ARGS ? JSON.parse(process.env.PACMAN_BROWSER_ARGS) :
     testThree ? ['--enable-unsafe-swiftshader', '--use-angle=swiftshader-webgl', '--ignore-gpu-blocklist'] : ['--disable-gpu', '--disable-software-rasterizer'];
   browser = spawn(executable, ['--headless', '--no-sandbox', '--disable-dev-shm-usage',
@@ -173,6 +176,36 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
     return layout;
   }
 
+  await t.test('city power pellets have a bright lens and darker rim at native tile size', async () => {
+    const samples = await client.evaluate(`(() => {
+      const context = canvas.getContext('2d'), timestamp = performance.now();
+      const state = { maze, player: { ...player, alive: false }, ghosts: [], powerTimer: 0,
+        animFrame: 0, gameState: 'paused', retroWorld: { mix: 0 } };
+      const x = 1.5 * TILE, y = 3.5 * TILE;
+      const pixel = offset => [...context.getImageData(x + offset, y, 1, 1).data];
+      GameRenderer.render(timestamp, state);
+      const center = pixel(0), rim = pixel(5);
+      state.retroWorld.mix = 1;
+      GameRenderer.render(timestamp, state);
+      const retro = pixel(0);
+      const pellet = maze[3][1];
+      try {
+        maze[3][1] = 1;
+        state.retroWorld.mix = 0;
+        GameRenderer.render(timestamp, state);
+        const street = pixel(0);
+        state.retroWorld.mix = 1;
+        GameRenderer.render(timestamp, state);
+        return { center, rim, retro, street, emptyRetro: pixel(0) };
+      } finally { maze[3][1] = pellet; }
+    })()`);
+    assert.ok(samples.center[0] > samples.center[2] + 40, 'the lens reads as amber');
+    assert.ok(samples.center[0] > samples.rim[0] + 25, 'the lens stands out from its bezel');
+    assert.ok(samples.rim[0] > samples.street[0] + 12, 'the raised bezel is visible over the wet street');
+    assert.deepEqual(samples.retro, [255, 184, 174, 255]);
+    assert.deepEqual(samples.emptyRetro, [0, 0, 0, 255]);
+  });
+
   await t.test('tunnel actors remain visible on both sides of the horizontal seam', async () => {
     const samples = await client.evaluate(`(() => {
       const ctx = canvas.getContext('2d'), timestamp = performance.now();
@@ -209,6 +242,8 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
   await t.test('death fragments remain visible across the tunnel seam throughout their flight', async () => {
     const samples = await client.evaluate(`(() => {
       const context = canvas.getContext('2d'), timestamp = performance.now();
+      const layout = CityLayout.create(maze, TILE);
+      const options = { tile: TILE, lampAt: (x, y) => CityLighting.lampLevelAt(layout, null, x, y) };
       const state = { maze, player: { ...player, alive: false }, ghosts: [],
         powerTimer: 0, animFrame: 0, gameState: 'paused' };
       const results = [];
@@ -221,7 +256,7 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
         // not crossed the seam yet, so both sides need not contain pixels.
         for (const offset of [0, canvas.width, -canvas.width]) {
           context.save(); context.translate(offset, 0);
-          PlayerDeathArtwork.draw(context, effect, { tile: TILE }); context.restore();
+          PlayerDeathArtwork.draw(context, effect, options); context.restore();
         }
         const expected = context.getImageData(0, 144, canvas.width, 80).data;
         GameRenderer.render(timestamp, { ...state, playerDeath: effect });
@@ -558,7 +593,10 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
         const [dx, dy] = DIRS[dir];
         const bite = ctx.getImageData(48 + dx * 19, 48 + dy * 19, 1, 1).data[3];
         const body = ctx.getImageData(48 - dx * 19, 48 - dy * 19, 1, 1).data[3];
-        if (body < 240 || bite > 180) throw new Error('Lost circular body or open bite: ' + dir);
+        if (body < 240 || bite > 180) {
+          throw new Error('Lost circular body or open bite in direction ' + dir +
+            ' with power timer ' + powerTimer + ' (body alpha ' + body + ', bite alpha ' + bite + ')');
+        }
         signatures.push(surface.toDataURL());
         previewContext.drawImage(surface, dir * 96, row * 96);
         PlayerArtwork.draw(previewContext, { x: dir * 96 + 38 + row * 20, y: 216, dir, mouth: 0.6, alive: true },
@@ -864,16 +902,17 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
         const state = { maze, player: { ...player, alive: false }, ghosts: [], animFrame: 0,
           powerTimer: 0, gameState: 'paused', retroWorld: retroWorld.state };
         const context = canvas.getContext('2d'), timestamp = performance.now();
+        const pixels = () => context.getImageData(0, 0, canvas.width, canvas.height).data;
         GameRenderer.render(timestamp, state);
-        const before = canvas.toDataURL();
+        const before = pixels();
         if (${JSON.stringify(kind)} === 'death') {
           state.playerDeath = PlayerDeath.create(player).state;
           state.playerDeath.age = 30;
         } else {
           state.bonusLife = { effect: { x: player.x, y: player.y, age: 10, duration: 72 } };
         }
-        const allowed = new Set(['0,0,0', '33,33,255', '255,184,255', '255,184,174',
-          '255,255,0', '255,0,0', '255,255,255', '255,184,82', '0,255,255', '16,44,87']);
+        const allowed = new Set([0x000000, 0x2121ff, 0xffb8ff, 0xffb8ae, 0xffff00,
+          0xff0000, 0xffffff, 0xffb852, 0x00ffff, 0x102c57]);
         const foreign = new Set();
         let invalid = 0, blendErrors = 0, maxBlendError = 0, visible = true;
         const effect = state.playerDeath || state.bonusLife.effect;
@@ -882,12 +921,15 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
           const frames = [0, 1, 0.5].map(mix => {
             state.retroWorld.mix = mix;
             GameRenderer.render(timestamp, state);
-            return context.getImageData(0, 0, canvas.width, canvas.height).data;
+            return pixels();
           });
           const [city, past, half] = frames;
+          let changed = false;
           for (let i = 0; i < past.length; i += 4) {
-            const color = past.slice(i, i + 3).join(',');
+            const color = (past[i] << 16) | (past[i + 1] << 8) | past[i + 2];
             if (past[i + 3] !== 255 || !allowed.has(color)) { invalid++; foreign.add(color); }
+            changed ||= past[i] !== before[i] || past[i + 1] !== before[i + 1] ||
+              past[i + 2] !== before[i + 2] || past[i + 3] !== before[i + 3];
             const alpha = city[i + 3] + past[i + 3];
             if (Math.abs(half[i + 3] - alpha / 2) > 2) blendErrors++;
             for (let channel = 0; channel < 3; channel++) {
@@ -901,9 +943,10 @@ test('browser smoke: city, actors, death fragments, search, movement, pause, mob
               if (error > 3) blendErrors++;
             }
           }
-          state.retroWorld.mix = 1; GameRenderer.render(timestamp, state);
-          visible &&= before !== canvas.toDataURL();
+          visible &&= changed;
         }
+        state.retroWorld.mix = 1;
+        GameRenderer.render(timestamp, state);
         return { invalid, foreignColors: foreign.size, changed: visible, blendErrors, maxBlendError };
       })()`);
       assert.equal(result.changed, true, `${kind} feedback must remain visible`);

@@ -46,7 +46,7 @@ test('the arcade coin has antique brass shading, a ridged rim, wear and an engra
 
 test('amber glow and the flattened asphalt reflection stay below the slowly rotating, floating coin', () => {
   const calls = paint();
-  const reflection = calls.findIndex(([method, x, y]) => method === 'scale' && x === 1 && y === 0.24);
+  const reflection = calls.findIndex(([method, x, y]) => method === 'scale' && x === 1 && y < 0.4);
   const face = calls.findIndex(([method, x, y]) => method === 'scale' && x !== 16 && x !== 1 && y === 1);
   assert.ok(reflection > 0 && reflection < face);
   assert.ok(calls.some(([method, , value]) => method === 'addColorStop' && value === 'rgba(230, 161, 53, 0.18)'));

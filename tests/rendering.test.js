@@ -139,6 +139,23 @@ test('consumed collectibles disappear without a stale static-dot layer', () => {
   assert.equal(game.drawing.filter(([method, , , radius]) => method === 'arc' && radius === 1.8).length, dotCount - 1);
 });
 
+test('city actors sample the same streetlamp dimming as the scenery', () => {
+  const game = boot({ reducedMotion: true });
+  game.run(`globalThis.lightReadings = [];
+    const layout = CityLayout.create(maze, TILE);
+    const glitch = { seed: 256, age: 30, duration: 180, ticksPerSecond: 60, phase: 'lamps' };
+    const index = Level256GlitchArtwork.createPattern(layout, glitch.seed).lamps[0];
+    const lamp = layout.lamps[index];
+    let lampLevels;
+    GameRenderer.setEnvironment({ setLayout() {}, draw(ctx, frame) { lampLevels = frame.lampLevels; } });
+    GameRenderer.setActors({ player(ctx, actor, options) {
+      lightReadings.push([options.lampAt(lamp.x, lamp.y), lampLevels?.[index] ?? 1, options.lampAt(-200, -200)]);
+    } });
+    const state = { maze, player, ghosts: [], powerTimer: 0, animFrame: 0, gameState: 'paused' };
+    for (const level256Glitch of [null, glitch, null]) GameRenderer.render(0, { ...state, level256Glitch });`);
+  assert.deepEqual(JSON.parse(game.run('JSON.stringify(lightReadings)')), [[1, 1, 0], [0.72, 0.72, 0], [1, 1, 0]]);
+});
+
 test('ghost-house barriers are drawn at their actual grid cells', () => {
   const game = boot();
   game.drawing.length = 0;

@@ -1,5 +1,5 @@
-// Shared overlay artwork for both the Canvas city and the Three.js environment.
 const BonusLifeArtwork = (() => {
+  const lighting = typeof module !== 'undefined' && module.exports ? require('./city-lighting') : CityLighting;
   const circle = Math.PI * 2;
 
   function emblem(ctx, x, y, color) {
@@ -25,21 +25,16 @@ const BonusLifeArtwork = (() => {
     ctx.restore();
   }
 
-  function drawCoin(ctx, coin, { tile, time = 0, reducedMotion = false, world = 'city' }) {
+  function drawCoin(ctx, coin, { tile, time = 0, reducedMotion = false, world = 'city', lampAt }) {
     if (!coin) return;
     if (world === 'retro') { retroCoin(ctx, coin, tile, time, reducedMotion); return; }
     const phase = reducedMotion ? 0 : time * 0.8;
     const turn = Math.max(0.14, Math.abs(Math.cos(phase)));
     const hover = reducedMotion ? 0 : Math.sin(time * 1.3) * 0.035;
+    const lamp = lampAt?.(coin.x, coin.y) ?? 0;
     ctx.save(); ctx.translate(coin.x, coin.y); ctx.scale(tile, tile);
 
-    // A flattened amber reflection stays on the wet asphalt, below the coin.
-    ctx.save(); ctx.translate(0, 0.3); ctx.scale(1, 0.24);
-    const reflection = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.75);
-    reflection.addColorStop(0, 'rgba(235, 174, 72, 0.3)');
-    reflection.addColorStop(1, 'rgba(235, 174, 72, 0)');
-    ctx.fillStyle = reflection;
-    ctx.beginPath(); ctx.arc(0, 0, 0.75, 0, circle); ctx.fill(); ctx.restore();
+    lighting.ground(ctx, 0.32, 0.66, 'rgba(235, 174, 72, 0.39)');
     ctx.strokeStyle = 'rgba(238, 186, 92, 0.22)'; ctx.lineWidth = 0.025;
     ctx.beginPath(); ctx.moveTo(-0.25, 0.3); ctx.lineTo(0.17, 0.3);
     ctx.moveTo(-0.12, 0.37); ctx.lineTo(0.24, 0.37); ctx.stroke();
@@ -51,10 +46,16 @@ const BonusLifeArtwork = (() => {
     ctx.beginPath(); ctx.arc(0, -0.15, 0.95, 0, circle); ctx.fill();
 
     ctx.translate(0, -0.18 + hover);
-    ctx.fillStyle = '#63451f';
-    ctx.beginPath(); ctx.ellipse(Math.sin(phase) * 0.055, 0, 0.43 * turn + 0.035, 0.44, 0, 0, circle); ctx.fill();
+    const edge = ctx.createLinearGradient(-0.1, -0.42, 0.08, 0.45);
+    edge.addColorStop(0, '#ebc577');
+    edge.addColorStop(0.46, '#886337');
+    edge.addColorStop(1, '#374436');
+    ctx.fillStyle = edge;
+    ctx.beginPath();
+    ctx.ellipse(Math.sin(phase) * 0.062, 0.057, 0.43 * turn + 0.044, 0.44, 0, 0, circle);
+    ctx.fill();
     ctx.scale(turn, 1);
-    const brass = ctx.createLinearGradient(-0.32, -0.42, 0.34, 0.42);
+    const brass = ctx.createRadialGradient(-0.17, -0.23, 0.02, 0, 0, 0.48);
     brass.addColorStop(0, '#f1d18a'); brass.addColorStop(0.32, '#bd9144');
     brass.addColorStop(0.7, '#89602c'); brass.addColorStop(1, '#4c432d');
     ctx.fillStyle = brass; ctx.strokeStyle = '#dcb86c'; ctx.lineWidth = 0.035;
@@ -62,12 +63,15 @@ const BonusLifeArtwork = (() => {
     ctx.beginPath(); ctx.arc(0, 0, 0.42, 0, circle); ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
     ctx.strokeStyle = '#775327'; ctx.lineWidth = 0.025;
     ctx.beginPath(); ctx.arc(0, 0, 0.32, 0, circle); ctx.stroke();
-    ctx.strokeStyle = 'rgba(250, 218, 145, 0.55)'; ctx.lineWidth = 0.018;
+    ctx.strokeStyle = `rgba(250, 218, 145, ${0.55 + lamp * 0.22})`; ctx.lineWidth = 0.018;
+    ctx.beginPath(); ctx.arc(0.008, 0.014, 0.305, -0.22, Math.PI * 0.82); ctx.stroke();
+    ctx.beginPath();
     for (let i = 0; i < 16; i++) {
       const angle = i * circle / 16;
-      ctx.beginPath(); ctx.moveTo(Math.cos(angle) * 0.365, Math.sin(angle) * 0.365);
-      ctx.lineTo(Math.cos(angle) * 0.39, Math.sin(angle) * 0.39); ctx.stroke();
+      ctx.moveTo(Math.cos(angle) * 0.365, Math.sin(angle) * 0.365);
+      ctx.lineTo(Math.cos(angle) * 0.393, Math.sin(angle) * 0.393);
     }
+    ctx.stroke();
     // Offset relief gives the dark Pac-Man stamp a worn, engraved lower edge.
     emblem(ctx, 0.008, 0.018, '#e4bb69');
     emblem(ctx, 0, 0, '#634620');

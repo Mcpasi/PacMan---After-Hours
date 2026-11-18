@@ -11,7 +11,7 @@ function paint(ghost, extra = {}) {
   const ctx = new Proxy({}, {
     set(_, key, value) { calls.push(['set', key, typeof value?.addColorStop === 'function' ? 'gradient' : value]); return true; },
     get(_, key) {
-      if (key === 'createLinearGradient') return (...args) => {
+      if (key === 'createLinearGradient' || key === 'createRadialGradient') return (...args) => {
         calls.push([key, ...args]);
         return { addColorStop: (...args) => calls.push(['addColorStop', ...args]) };
       };
@@ -49,10 +49,26 @@ test('eaten ghosts render only directional eyes, with no body, aura or shadow', 
   for (const profile of GhostProfiles.all) {
     const ghost = actor(profile.id, 5, 5); ghost.mode = 'eyes';
     const calls = paint(ghost);
-    assert.equal(calls.some(([method]) => method === 'createLinearGradient'), false);
+    assert.equal(calls.some(([method]) => method === 'createLinearGradient' || method === 'createRadialGradient'), false);
     assert.equal(calls.some(([method]) => method === 'lineTo' || method === 'quadraticCurveTo'), false);
     assert.equal(calls.filter(([method]) => method === 'ellipse').length, 2);
     assert.equal(calls.filter(([method, , , radius]) => method === 'arc' && radius === 0.063).length, 2);
+  }
+});
+
+test('the hood floats over a fixed street reflection and clips the fabric folds', () => {
+  for (const profile of GhostProfiles.all) {
+    const ghost = actor(profile.id, 5, 5);
+    const frames = [0.2, 0.8].map(time => paint(ghost, { time }));
+    for (const calls of frames) {
+      const ground = calls.findIndex(([method]) => method === 'ellipse');
+      const clip = calls.findIndex(([method]) => method === 'clip');
+      const hood = calls.findIndex(([method]) => method === 'fillRect');
+      assert.ok(ground >= 0 && ground < clip && clip < hood);
+    }
+    const contact = calls => calls.slice(0, calls.findIndex(([method]) => method === 'restore') + 1);
+    assert.deepEqual(contact(frames[0]), contact(frames[1]), `${profile.id}'s reflection moved with the hood`);
+    assert.notDeepEqual(frames[0], frames[1]);
   }
 });
 

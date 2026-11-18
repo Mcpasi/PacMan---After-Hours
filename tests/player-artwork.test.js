@@ -8,7 +8,7 @@ function paint(player = {}, options = {}) {
   const ctx = new Proxy({}, {
     set(_, key, value) { calls.push(['set', key, typeof value?.addColorStop === 'function' ? 'gradient' : value]); return true; },
     get(_, key) {
-      if (key === 'createLinearGradient') return (...args) => {
+      if (key === 'createLinearGradient' || key === 'createRadialGradient') return (...args) => {
         calls.push([key, ...args]);
         return { addColorStop: (...args) => calls.push(['addColorStop', ...args]) };
       };
@@ -39,6 +39,18 @@ test('the brass skin retains the round silhouette, original bite and all four he
         assert.equal(calls.filter(([method]) => method === 'restore').length, 2);
       }
     }
+  }
+});
+
+test('the brass highlight stays in world space when the player turns', () => {
+  for (const dir of [0, 1, 2, 3]) {
+    const calls = paint({ dir });
+    const [, x, y] = calls.filter(([method]) => method === 'createRadialGradient').at(-1);
+    const rotation = dir * Math.PI / 2;
+    const worldX = x * Math.cos(rotation) - y * Math.sin(rotation);
+    const worldY = x * Math.sin(rotation) + y * Math.cos(rotation);
+    assert.ok(worldX < 0 && worldY < 0, 'every heading catches light from the upper left');
+    assert.ok(Math.abs(worldX - worldY) < 1e-9);
   }
 });
 

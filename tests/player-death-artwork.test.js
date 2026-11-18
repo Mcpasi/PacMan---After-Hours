@@ -11,7 +11,7 @@ function paint(entity = effect, options = {}) {
   const ctx = new Proxy({}, {
     set(_, key, value) { calls.push(['set', key, typeof value?.addColorStop === 'function' ? 'gradient' : value]); return true; },
     get(_, key) {
-      if (key === 'createLinearGradient') return (...args) => {
+      if (key === 'createLinearGradient' || key === 'createRadialGradient') return (...args) => {
         calls.push([key, ...args]);
         return { addColorStop: (...args) => calls.push(['addColorStop', ...args]) };
       };
@@ -41,7 +41,7 @@ test('the original Pac-Man bite breaks into separate brass wedges at every headi
       assert.deepEqual(calls.find(([method]) => method === 'translate'), ['translate', 120, 88]);
       assert.deepEqual(calls.find(([method]) => method === 'scale'), ['scale', tile, tile]);
       assert.deepEqual(calls.find(([method]) => method === 'rotate'), ['rotate', dir * Math.PI / 2]);
-      assert.deepEqual(calls.filter(([method]) => method === 'arc'), entity.fragments.map(fragment =>
+      assert.deepEqual(calls.filter(([method, , , radius]) => method === 'arc' && radius === 0.45), entity.fragments.map(fragment =>
         ['arc', 0, 0, 0.45, fragment.start, fragment.end]));
       assert.equal(calls.filter(([method]) => method === 'clip').length, 9);
       for (const color of ['#f3d58a', '#c69848', '#926329', '#354348']) {
@@ -68,7 +68,8 @@ test('reduced motion keeps the cracked body stationary and only fades it out', (
   const geometry = calls => calls.filter(([method]) => method !== 'set');
   assert.deepEqual(geometry(initial), geometry(late));
   assert.notDeepEqual(initial, late, 'opacity still fades');
-  assert.equal(initial.some(([method]) => method === 'createRadialGradient'), false, 'no flash or expanding pulse');
+  assert.ok(initial.filter(([method, key]) => method === 'set' && key === 'shadowBlur')
+    .every(([, , blur]) => blur === 0), 'shaded fragments do not flash');
 });
 
 test('the shared renderer draws the death above ghosts in any environment and passes reduced-motion settings', () => {
